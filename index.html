@@ -683,9 +683,11 @@ function renderSheet(){
       <div class="acts2"><button class="btn" data-act="close">Volver</button><button class="btn primary" data-act="salidaGo" ${S.busy?'disabled':''}>${S.busy?'Guardando…':'Sí, me los llevo'}</button></div>`;
   }else if(s.k==='ent'&&p){
     h=`<div><div class="eyebrow">${esc(p.order)} · ${esc(p.distrito)}</div><h2>Entrega a ${esc(p.receptor||p.cliente)}</h2></div>
-      <div class="photo-drop">${s.preview?`<img src="${s.preview}" alt="Foto de entrega">`:`<div>${IC.cam.replace('<svg','<svg style="width:36px;height:36px"')}<div style="font-weight:700;color:var(--ink);margin-top:6px">${s.leyendo?'Procesando foto…':'Tomar foto de la entrega'}</div><div style="font-size:13px">Paquete con el cliente o en la puerta</div></div>`}
-        <input id="f-foto" type="file" accept="image/*" capture="environment" data-act="foto" aria-label="Foto de entrega"></div>
-      ${s.preview?'<p class="muted" style="margin:-6px 0 0;font-size:13px;text-align:center">Toca la foto para cambiarla</p>':''}
+      <div class="photo-drop" style="min-height:${s.preview?'0':'140px'}">${s.preview?`<img src="${s.preview}" alt="Foto de entrega">`:`<div>${IC.cam.replace('<svg','<svg style="width:36px;height:36px"')}<div style="font-weight:700;color:var(--ink);margin-top:6px">${s.leyendo?'Procesando foto…':'Foto de la entrega'}</div><div style="font-size:13px">Paquete con el cliente o en la puerta</div></div>`}</div>
+      <div class="acts2">
+        <label class="btn" style="position:relative;overflow:hidden">${IC.cam}${s.preview?'Otra foto':'Tomar foto'}<input id="f-foto" type="file" accept="image/*" capture="environment" data-act="foto" aria-label="Tomar foto con la cámara" style="position:absolute;inset:0;opacity:0"></label>
+        <label class="btn" style="position:relative;overflow:hidden">${IC.up}Desde galería<input id="f-foto2" type="file" accept="image/*" data-act="foto" aria-label="Elegir foto de la galería" style="position:absolute;inset:0;opacity:0"></label>
+      </div>
       <label class="fld"><span>¿Quién recibió? (opcional)</span><textarea id="f-obs" class="input" placeholder="Ej.: recibió el portero">${esc(s.obs||'')}</textarea></label>
       <div class="acts2"><button class="btn" data-act="close">Cancelar</button><button class="btn ok" data-act="entGo" ${!s.foto||S.busy?'disabled':''}>${S.busy?'Guardando…':'Confirmar entrega'}</button></div>
       <p class="muted" style="margin:0;font-size:12.5px;text-align:center">La foto es obligatoria. La hora se guarda al confirmar. Si no hay señal, la foto se sube sola cuando vuelva.</p>`;
