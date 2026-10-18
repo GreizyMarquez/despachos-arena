@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Despachos Arena</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Despachos">
+<meta name="theme-color" content="#0B0C0E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: black brand band on top, one column of task cards on phone; on desktop the office view uses a wide table. */
+:root{
+  --bg:#F3F5F8; --surface:#FFFFFF; --ink:#101318; --muted:#596372; --line:#DCE1E8; --soft:#E9EDF3;
+  --accent:#0050B5; --accent-soft:#E3EDFB; --accent-ink:#FFFFFF;
+  --band:#0B0C0E; --band-ink:#FFFFFF; --band-muted:#A5ADB8;
+  --ok:#0C7F45; --ok-soft:#DFF3E8; --warn:#A85F00; --warn-soft:#FBEFD9; --bad:#BE2635; --bad-soft:#FBE3E5; --idle:#5E6876; --idle-soft:#E9ECF0;
+  --f-display:"Archivo","Arial Narrow",Arial,sans-serif; --f-body:"Archivo",system-ui,-apple-system,"Segoe UI",sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0C0F14; --surface:#151A21; --ink:#E8ECF2; --muted:#9AA4B2; --line:#28303B; --soft:#1C222B;
+  --accent:#5A9DFF; --accent-soft:#16273F; --accent-ink:#06101F;
+  --band:#000000; --band-ink:#FFFFFF; --band-muted:#8E97A3;
+  --ok:#43C27F; --ok-soft:#10291C; --warn:#F0A742; --warn-soft:#2C2010; --bad:#FF6B76; --bad-soft:#331519; --idle:#9AA4B2; --idle-soft:#1F252E;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0C0F14; --surface:#151A21; --ink:#E8ECF2; --muted:#9AA4B2; --line:#28303B; --soft:#1C222B;
+  --accent:#5A9DFF; --accent-soft:#16273F; --accent-ink:#06101F;
+  --band:#000000; --band-ink:#FFFFFF; --band-muted:#8E97A3;
+  --ok:#43C27F; --ok-soft:#10291C; --warn:#F0A742; --warn-soft:#2C2010; --bad:#FF6B76; --bad-soft:#331519; --idle:#9AA4B2; --idle-soft:#1F252E;
+  color-scheme:dark}
+*{box-sizing:border-box}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+html,body{background:var(--bg);margin:0}
+img{max-width:100%}
+.pin{display:flex;gap:10px;justify-content:center}
+.pin input{width:54px;height:62px;text-align:center;font-size:26px;font-family:var(--f-mono);border:1.5px solid var(--line);border-radius:12px;background:var(--surface)}
+body{color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.num{font-variant-numeric:tabular-nums}
+
+/* Brand band */
+.band{background:var(--band);color:var(--band-ink);position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
+.band-in{max-width:1180px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:14px}
+.logo{height:38px;width:auto;flex:none;color:var(--band-ink)}
+.brand-txt{display:flex;flex-direction:column;line-height:1.1;min-width:0}
+.brand-txt b{font-family:var(--f-display);font-stretch:118%;font-weight:800;letter-spacing:.02em;font-size:15px;text-transform:uppercase}
+.brand-txt span{color:var(--band-muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.switch{margin-left:auto;display:flex;background:#1E2126;border-radius:999px;padding:3px;flex:none}
+.switch button{border:0;background:transparent;color:var(--band-muted);padding:7px 13px;border-radius:999px;font-weight:600;font-size:13px}
+.switch button[aria-pressed="true"]{background:var(--band-ink);color:var(--band)}
+.sync{width:8px;height:8px;border-radius:50%;background:var(--band-muted);flex:none}
+.sync.on{background:#3DDC84}.sync.off{background:#FF5C66}
+
+main{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:16px 120px;display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance}
+h1{font-size:24px;font-weight:800;font-stretch:112%;letter-spacing:-.01em}
+h2{font-size:18px;font-weight:750;font-stretch:108%}
+h3{font-size:15px;font-weight:700}
+.eyebrow{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.muted{color:var(--muted)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spread{justify-content:space-between}
+.grow{flex:1;min-width:0}
+
+/* Controls */
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 14px;font-weight:600;display:inline-flex;align-items:center;gap:8px;justify-content:center;min-height:44px;text-decoration:none;color:var(--ink)}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.dark{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.bad{background:var(--surface);border-color:var(--bad);color:var(--bad)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted);min-height:36px;padding:6px 8px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{min-height:36px;padding:6px 11px;font-size:13px}
+.btn svg{width:18px;height:18px;flex:none}
+.input,select.input{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 12px;min-height:44px;width:100%}
+textarea.input{min-height:72px;resize:vertical}
+label.fld{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:var(--muted)}
+
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{border:0;background:transparent;padding:10px 12px;font-weight:650;color:var(--muted);border-bottom:2.5px solid transparent;white-space:nowrap;display:flex;gap:7px;align-items:center}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+.count{font-family:var(--f-mono);font-size:12px;background:var(--soft);color:var(--muted);border-radius:999px;padding:1px 8px}
+.tabs button[aria-selected="true"] .count{background:var(--ink);color:var(--bg)}
+
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.st-pendiente{background:var(--idle-soft);color:var(--idle)}
+.st-reprog{background:var(--warn-soft);color:var(--warn)}
+.st-en_ruta{background:var(--accent-soft);color:var(--accent)}
+.st-entregado{background:var(--ok-soft);color:var(--ok)}
+.st-noent{background:var(--bad-soft);color:var(--bad)}
+
+/* Cards */
+.list{display:flex;flex-direction:column;gap:10px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.card.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.card-head{display:flex;gap:12px;align-items:flex-start}
+.ord{font-family:var(--f-mono);font-size:12.5px;color:var(--muted);font-weight:600}
+.who{font-weight:700;font-size:16px;line-height:1.25}
+.addr{font-size:14px}
+.addr .dist{font-weight:700;text-transform:uppercase;letter-spacing:.03em;font-size:12.5px}
+.items{font-size:13px;color:var(--muted)}
+.check{width:26px;height:26px;border-radius:8px;border:2px solid var(--line);flex:none;display:grid;place-items:center;background:var(--surface);margin-top:2px}
+.card.sel .check{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.check svg{width:16px;height:16px;opacity:0}.card.sel .check svg{opacity:1}
+.acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.acts2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.note{font-size:13px;border-radius:8px;padding:8px 10px;background:var(--warn-soft);color:var(--warn)}
+.note.info{background:var(--accent-soft);color:var(--accent)}
+.note.bad{background:var(--bad-soft);color:var(--bad)}
+.meta{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:650}
+
+.empty{border:1.5px dashed var(--line);border-radius:var(--r);padding:28px 18px;text-align:center;color:var(--muted);display:flex;flex-direction:column;gap:10px;align-items:center}
+.empty h3{color:var(--ink)}
+
+/* Bottom action bar */
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));z-index:30}
+.bar-in{max-width:760px;margin:0 auto;display:flex;gap:10px;align-items:center}
+
+/* KPIs */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.kpi .v{font-family:var(--f-display);font-weight:800;font-size:28px;font-stretch:105%;font-variant-numeric:tabular-nums;line-height:1.1}
+.kpi .l{font-size:12.5px;color:var(--muted);font-weight:600}
+.kpi.t-ok .v{color:var(--ok)}.kpi.t-route .v{color:var(--accent)}.kpi.t-bad .v{color:var(--bad)}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:16px}
+
+/* Table */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{text-align:left;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:650;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--soft);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.t{white-space:nowrap;font-family:var(--f-mono);font-size:12.5px}
+.thumb{width:44px;height:44px;border-radius:8px;object-fit:cover;border:1px solid var(--line);display:block;background:var(--soft)}
+.linkbtn{border:0;background:none;color:var(--accent);font-weight:650;padding:0;text-decoration:underline;text-underline-offset:2px}
+
+/* Bars (dashboard) */
+.bars{display:flex;flex-direction:column;gap:9px}
+.bar-row{display:grid;grid-template-columns:minmax(92px,130px) 1fr 56px;gap:10px;align-items:center;font-size:13px}
+.bar-track{height:14px;background:var(--soft);border-radius:4px;overflow:hidden}
+.bar-fill{height:100%;background:var(--accent);border-radius:4px}
+.bar-fill.ok{background:var(--ok)}.bar-fill.warn{background:var(--warn)}.bar-fill.bad{background:var(--bad)}
+.bar-row .pct{text-align:right;font-family:var(--f-mono);font-weight:600}
+.cols{display:flex;align-items:flex-end;gap:4px;height:130px;border-bottom:1px solid var(--line);padding-top:16px}
+.col{flex:1;min-width:6px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:3px;height:100%}
+.col i{display:block;width:100%;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}
+.col span{font-size:10px;font-family:var(--f-mono);color:var(--muted)}
+.cols-x{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-family:var(--f-mono)}
+
+/* Sheets */
+.scrim{position:fixed;inset:0;background:rgba(5,8,12,.55);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+@media (min-width:720px){.scrim{align-items:center}}
+.sheet{background:var(--surface);width:100%;max-width:560px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px}
+@media (min-width:720px){.sheet{border-radius:16px;max-width:640px}}
+.sheet.wide{max-width:900px}
+.photo-drop{border:2px dashed var(--line);border-radius:12px;min-height:180px;display:grid;place-items:center;text-align:center;color:var(--muted);padding:14px;position:relative;overflow:hidden}
+.photo-drop img{max-width:100%;max-height:320px;border-radius:8px;display:block}
+.photo-drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.full-img{max-width:100%;max-height:75vh;border-radius:10px;display:block;margin:0 auto}
+.progress{height:8px;background:var(--soft);border-radius:999px;overflow:hidden}
+.progress i{display:block;height:100%;background:var(--accent);transition:width .2s}
+.imp-list{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.imp-row{display:grid;grid-template-columns:28px 1fr auto;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);align-items:center;font-size:13.5px}
+.imp-row:last-child{border-bottom:0}
+.imp-row input{width:18px;height:18px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(92px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;z-index:60;max-width:calc(100% - 32px);font-size:14px}
+.who-pick{display:grid;gap:10px}
+.who-pick button{text-align:left;padding:16px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:700;font-size:17px;display:flex;align-items:center;gap:12px}
+.avatar{width:38px;height:38px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-family:var(--f-display);font-weight:800;flex:none}
+@media (max-width:560px){.hide-sm{display:none!important}.brand-txt span{display:none}}
+@media (min-width:900px){.only-sm{display:none!important}}
+@media (max-width:899px){.only-lg{display:none!important}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="band">
+  <div class="band-in">
+    <svg class="logo" viewBox="85 215 910 650" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="arena"><g fill="currentColor"><path d="M 540.01 853.45 C 568.07 853.45 584.10 843.46 607.32 829.07 L 745.29 743.50 L 540.01 616.11 L 334.70 743.50 L 472.66 829.07 C 495.93 843.46 511.95 853.45 540.01 853.45"/><path d="M 301.03 488.74 C 276.37 488.74 256.92 495.26 233.69 509.64 L 95.71 595.21 L 301.03 722.63 L 506.37 595.21 L 368.35 509.64 C 345.13 495.26 325.68 488.74 301.03 488.74"/><path d="M 778.97 488.74 C 754.31 488.74 734.82 495.26 711.67 509.64 L 573.64 595.21 L 778.97 722.63 L 984.28 595.21 L 846.26 509.64 C 823.05 495.26 803.62 488.74 778.97 488.74"/><path d="M 217.54 398.59 C 197.09 398.59 188.49 380.33 188.49 339.43 C 188.49 298.64 197.09 280.34 217.54 280.34 C 238 280.34 246.54 298.64 246.54 339.43 C 246.54 380.33 238 398.59 217.54 398.59 M 255.10 231.93 L 251.91 246.99 C 242.26 232.99 225.05 226.53 205.72 226.53 C 158.40 226.53 131.53 267.44 131.53 339.43 C 131.53 413.65 157.33 452.36 205.72 452.36 C 225.05 452.36 242.26 446.93 251.91 431.91 L 255.10 446.93 L 303.53 446.93 L 303.53 231.93 Z M 255.10 231.93"/><path d="M 501.64 278.16 C 518.85 278.16 529.58 291.02 529.58 314.71 L 470.5 314.71 C 473.72 290.04 483.40 278.16 501.64 278.16 M 502.73 400.74 C 482.26 400.74 470.5 385.69 469.40 355.62 L 586.63 355.62 C 586.63 340.57 586.63 330.87 585.54 316.87 C 581.18 259.89 551.11 226.53 501.64 226.53 C 473.72 226.53 451.09 238.42 434.98 259.89 L 434.98 226.53 C 407.05 226.53 390.92 231.93 376.96 246.99 L 373.71 231.93 L 325.32 231.93 L 325.32 446.93 L 382.30 446.93 L 382.30 325.47 C 382.30 294.30 398.44 282.49 412.41 282.49 C 416.71 282.49 419.93 283.55 422.08 284.60 C 415.63 299.70 412.41 319.02 412.41 340.57 C 412.41 412.59 444.69 452.36 501.64 452.36 C 553.26 452.36 582.25 424.40 584.44 376.00 L 530.67 376.00 C 528.53 392.14 518.85 400.74 502.73 400.74"/><path d="M 755.93 288.91 L 755.93 446.93 L 698.94 446.93 L 698.94 312.60 C 698.94 288.91 693.56 280.34 679.53 280.34 C 666.65 280.34 658.07 291.02 658.07 312.60 L 658.07 446.93 L 601.04 446.93 L 601.04 231.93 L 649.46 231.93 L 652.71 246.99 C 664.55 232.99 679.53 226.54 698.94 226.54 C 737.63 226.54 755.93 246.99 755.93 288.91"/><path d="M 856.41 398.59 C 836.01 398.59 827.35 380.33 827.35 339.43 C 827.35 298.64 836.01 280.34 856.41 280.34 C 876.84 280.34 885.42 298.64 885.42 339.43 C 885.42 380.33 876.84 398.59 856.41 398.59 M 894.01 231.93 L 890.80 246.99 C 881.11 232.99 863.96 226.53 844.56 226.53 C 797.25 226.53 770.38 267.44 770.38 339.43 C 770.38 413.65 796.19 452.36 844.56 452.36 C 863.96 452.36 881.11 446.93 890.80 431.91 L 894.01 446.93 L 942.41 446.93 L 942.41 231.93 Z M 894.01 231.93"/></g></svg>
+    <div class="brand-txt"><b>Despachos</b><span id="subtitle">Pedidos del motorizado</span></div>
+    <span class="sync" id="sync" title="Conexión"></span>
+    <div class="switch" role="group" aria-label="Vista">
+      <button id="v-moto" data-act="view" data-v="moto">Motorizado</button>
+      <button id="v-ofi" data-act="view" data-v="ofi">Oficina</button>
+    </div>
+  </div>
+</header>
+<main id="app">
+  <div class="empty"><h3>Conectando con la base de pedidos…</h3><p>En unos segundos verás los pedidos del día.</p></div>
+</main>
+<div id="bar"></div>
+<div id="sheet"></div>
+<div id="toast" hidden class="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script>
+/* ===== PEGA AQUÍ LA CONFIGURACIÓN DE TU PROYECTO DE FIREBASE ===== */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD1yhoH_BMjyh0ho57ER0LT6_FoYRcy4_w",
+  authDomain: "arena-despachos.firebaseapp.com",
+  projectId: "arena-despachos",
+  storageBucket: "arena-despachos.firebasestorage.app",
+  messagingSenderId: "4998033872",
+  appId: "1:4998033872:web:a9e8ae6db14016911889d5"
+};
+/* ================================================================= */
+</script>
+<script>
+(function(){
+"use strict";
+const TZ='America/Lima';
+const fmtD=new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'});
+const fmtH=new Intl.DateTimeFormat('es-PE',{timeZone:TZ,hour:'2-digit',minute:'2-digit',hour12:false});
+const dLocal=t=>fmtD.format(new Date(t));
+const hoy=()=>dLocal(Date.now());
+const hLocal=t=>t?fmtH.format(new Date(t)):'';
+const addDays=(ds,n)=>{const [y,m,d]=ds.split('-').map(Number);return new Date(Date.UTC(y,m-1,d+n)).toISOString().slice(0,10)};
+const diffDays=(a,b)=>Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/864e5);
+const fechaLarga=ds=>new Date(ds+'T12:00:00Z').toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long',timeZone:'UTC'});
+const fechaCorta=ds=>{if(!ds)return'';const [y,m,d]=ds.split('-');return d+'/'+m+'/'+y};
+const durTxt=min=>{if(min==null||isNaN(min)||min<0)return'—';min=Math.round(min);return min<60?min+' min':Math.floor(min/60)+' h '+String(min%60).padStart(2,'0')+' min'};
+const hmm=min=>{if(min==null||isNaN(min)||min<0)return'';min=Math.round(min);return Math.floor(min/60)+':'+String(min%60).padStart(2,'0')};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nowISO=()=>new Date().toISOString();
+const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+const IC={
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  map:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
+  wa:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1.3-4A8 8 0 1 1 8.6 19z"/><path d="M9 9.5c.3 2.2 2.3 4.2 4.5 4.6l1.2-1.2 2 .9c-.3 1.3-1.4 2-2.6 1.8-3.2-.6-5.8-3.2-6.3-6.4-.2-1.2.5-2.3 1.8-2.6l.9 2z"/></svg>',
+  phone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>',
+  cam:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>',
+  down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg>',
+  truck:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M3 17V7h11v10M14 10h4l3 3v4h-2M9 17h6"/></svg>'
+};
+const MOTIVOS=['Cliente ausente','No contesta el teléfono','Dirección incorrecta o incompleta','Cliente pidió otra fecha','Zona de difícil acceso','Se acabó el tiempo de ruta','Otro'];
+
+const S={
+  db:null,
+  ready:false,online:null,readOnly:false,setupError:'',
+  pinHash:null,ofiOk:ls.get('arena.ofiOk')==='1',
+  pedidos:new Map(),
+  motos:[],cfgVersion:null,
+  view:ls.get('arena.view')||'moto',
+  me:ls.get('arena.moto')||'',
+  motoTab:'recoger',
+  ofiTab:'dia',
+  fecha:hoy(),
+  filtro:'todos',q:'',
+  sel:new Set(),
+  rango:30,
+  sheet:null,busy:false
+};
+
+/* ---------- data helpers ---------- */
+function etiquetaEstado(p){
+  if(p.estado==='entregado')return['Entregado','st-entregado'];
+  if(p.estado==='en_ruta')return['En ruta','st-en_ruta'];
+  if((p.intentos||0)>0)return['Reprogramado','st-reprog'];
+  return['Por recoger','st-pendiente'];
+}
+function pill(p){const [t,c]=etiquetaEstado(p);return `<span class="pill ${c}">${t}</span>`}
+function porRecoger(){const d=hoy();return [...S.pedidos.values()].filter(p=>p.estado==='pendiente'&&(p.fechaPlan||p.fechaCarga)<=d).sort(ordenRuta)}
+function ordenRuta(a,b){return (a.distrito||'').localeCompare(b.distrito||'')||(a.order||'').localeCompare(b.order||'')}
+function enRuta(m){return [...S.pedidos.values()].filter(p=>p.estado==='en_ruta'&&(!m||p.motorizado===m)).sort((a,b)=>(a.salida||0)-(b.salida||0)||ordenRuta(a,b))}
+function eventosDe(D){const r=[];for(const p of S.pedidos.values())for(const e of p.historial||[])if(dLocal(e.t)===D)r.push({p,e});r.sort((a,b)=>a.e.t<b.e.t?-1:1);return r}
+function ultimoRecojoAntes(p,t){let r=null;for(const e of p.historial||[])if(e.tipo==='recojo'&&e.t<=t)r=e;return r}
+function minutosEntrega(p,e){const r=ultimoRecojoAntes(p,e.t);return r?(Date.parse(e.t)-Date.parse(r.t))/60000:null}
+function siguienteSalida(m){const d=hoy();let mx=0;for(const {e} of eventosDe(d))if(e.tipo==='recojo'&&e.m===m)mx=Math.max(mx,e.salida||0);return mx+1}
+
+function resumenDia(D){
+  const ev=eventosDe(D),porMoto={},llevados=[],entregas=[],noEnt=[];
+  for(const x of ev){
+    if(!['recojo','entrega','no_entrega'].includes(x.e.tipo))continue;
+    const m=x.e.m||'Sin nombre';
+    const pm=porMoto[m]||(porMoto[m]={m,ini:null,fin:null,salidas:new Set(),llevados:0,entregados:0,noEnt:0});
+    if(x.e.tipo==='recojo'){llevados.push(x);pm.llevados++;pm.salidas.add(x.e.salida||1);if(!pm.ini||x.e.t<pm.ini)pm.ini=x.e.t}
+    else if(x.e.tipo==='entrega'){entregas.push(x);pm.entregados++;if(!pm.fin||x.e.t>pm.fin)pm.fin=x.e.t}
+    else if(x.e.tipo==='no_entrega'){noEnt.push(x);pm.noEnt++;if(!pm.fin||x.e.t>pm.fin)pm.fin=x.e.t}
+  }
+  for(const pm of Object.values(porMoto))pm.min=(pm.ini&&pm.fin&&pm.fin>pm.ini)?(Date.parse(pm.fin)-Date.parse(pm.ini))/60000:null;
+  const pendientes=[],cargados=[];
+  for(const p of S.pedidos.values()){
+    if(p.fechaCarga===D)cargados.push(p);
+    const ent=p.entregadoAt&&dLocal(p.entregadoAt)<=D;
+    if(p.fechaCarga<=D&&!ent)pendientes.push(p);
+  }
+  pendientes.sort(ordenRuta);
+  return {ev,porMoto,llevados,entregas,noEnt,pendientes,cargados};
+}
+function pedidosDelDia(D){
+  const ids=new Set();
+  for(const p of S.pedidos.values()){
+    if(p.fechaCarga===D)ids.add(p.id);
+    if(D===hoy()&&p.estado!=='entregado'&&(p.fechaPlan||p.fechaCarga)<=D)ids.add(p.id);
+  }
+  for(const {p} of eventosDe(D))ids.add(p.id);
+  return [...ids].map(id=>S.pedidos.get(id)).filter(Boolean);
+}
+function estadoEnDia(p,D){
+  const evs=(p.historial||[]).filter(e=>dLocal(e.t)===D);
+  const last=[...evs].reverse().find(e=>['recojo','entrega','no_entrega'].includes(e.tipo));
+  if(D===hoy())return etiquetaEstado(p);
+  if(!last)return p.entregadoAt&&dLocal(p.entregadoAt)<=D?['Entregado','st-entregado']:['Sin salir','st-pendiente'];
+  if(last.tipo==='entrega')return['Entregado','st-entregado'];
+  if(last.tipo==='no_entrega')return['No entregado','st-noent'];
+  return['En ruta al cierre','st-en_ruta'];
+}
+function waLink(tel,txt){let d=String(tel||'').replace(/\D/g,'');if(d.length===9)d='51'+d;return d?`https://wa.me/${d}?text=${encodeURIComponent(txt)}`:''}
+function mapsLink(p){const q=[p.direccion,p.distrito,p.ciudad,'Perú'].filter(Boolean).join(', ');return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q)}
+function telDisp(t){return String(t||'').replace(/^\+?51/,'').replace(/(\d{3})(\d{3})(\d{3})/,'$1 $2 $3')}
+
+/* ---------- writes ---------- */
+async function actualizar(p,campos,evento){
+  const hist=[...(p.historial||[]),...(evento?[evento]:[])];
+  const datos={...campos,historial:hist,actualizado:nowISO()};
+  S.pedidos.set(p.id,{...p,...datos});
+  // Firestore guarda primero en el celular y sube cuando hay señal: no esperamos al servidor
+  S.db.doc('pedidos/'+p.id).update(datos).catch(e=>toast(errMsg(e)));
+}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,3200)}
+function errMsg(e){
+  const c=e&&e.code;
+  if(c==='permission-denied')return 'La base no permitió guardar. Revisa las reglas de Firestore en tu proyecto.';
+  if(c==='resource-exhausted')return 'Se alcanzó el límite diario gratuito de Firebase. Vuelve a intentarlo mañana.';
+  if(c==='not-found')return 'Ese pedido ya no existe en la base.';
+  return 'No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.';
+}
+
+/* ---------- render ---------- */
+const app=document.getElementById('app');
+function render(){
+  const a=document.activeElement,fid=a&&a.id,ss=a&&a.selectionStart;
+  document.getElementById('v-moto').setAttribute('aria-pressed',S.view==='moto');
+  document.getElementById('v-ofi').setAttribute('aria-pressed',S.view==='ofi');
+  document.getElementById('subtitle').textContent=S.view==='moto'?(S.me?S.me+' · '+fechaLarga(hoy()):'Pedidos del motorizado'):'Oficina · Arena Perú';
+  const sy=document.getElementById('sync');sy.className='sync '+(S.online===true?'on':S.online===false?'off':'');
+  sy.title=S.online===true?'Conectado':S.online===false?'Sin conexión con la base':'Conectando';
+  if(!S.ready){renderBar('');return}
+  if(!S.db){app.innerHTML=`<div class="empty"><h3>No se pudo conectar con la base de pedidos</h3><p>${esc(S.setupError||'Revisa tu conexión a internet y vuelve a abrir la app.')}</p></div>`;renderBar('');return}
+  if(S.view==='ofi'&&!S.ofiOk){app.innerHTML=vPin();renderBar('');const i=document.getElementById('pin0');if(i&&!fid)i.focus();return}
+  app.innerHTML=S.view==='moto'?vMoto():vOfi();
+  if(fid){const el=document.getElementById(fid);if(el){el.focus();try{if(ss!=null)el.setSelectionRange(ss,ss)}catch(e){}}}
+}
+function renderBar(html){document.getElementById('bar').innerHTML=html}
+
+/* PIN de Oficina */
+async function sha(t){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('arena-despachos:'+t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+function vPin(){
+  if(!S.cfgLoaded)return `<div class="empty"><h3>Cargando…</h3></div>`;
+  const nuevo=!S.pinHash;
+  return `<section class="panel" style="max-width:420px;margin:24px auto 0;text-align:center;gap:16px">
+    <div><div class="eyebrow">Oficina</div><h1>${nuevo?'Crea el PIN de Oficina':'Ingresa el PIN'}</h1>
+    <p class="muted" style="margin:6px 0 0;font-size:14px">${nuevo?'4 dígitos. Con este PIN entras a cargar pedidos, ver reportes y descargar el Excel. El motorizado no lo necesita.':'La vista de Oficina está protegida. El motorizado no necesita PIN.'}</p></div>
+    <form data-form="pin"><div class="pin">${[0,1,2,3].map(i=>`<input id="pin${i}" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="off" aria-label="Dígito ${i+1}" data-act="pinIn" data-i="${i}">`).join('')}</div>
+    <button class="btn primary" type="submit" style="width:100%;margin-top:16px">${nuevo?'Guardar PIN':'Entrar'}</button></form>
+    <button class="btn ghost" data-act="view" data-v="moto">Volver a Motorizado</button></section>`;
+}
+
+/* Motorizado */
+function vMoto(){
+  if(S.readOnly&&!S.me){}
+  if(!S.me||!S.motos.includes(S.me)){
+    renderBar('');
+    const lista=S.motos.length?S.motos:[];
+    return `<section class="panel"><div><div class="eyebrow">Antes de empezar</div><h1>¿Quién está haciendo la ruta?</h1></div>
+      ${lista.length?`<div class="who-pick">${lista.map(m=>`<button data-act="soy" data-m="${esc(m)}"><span class="avatar">${esc(m.trim()[0]||'?').toUpperCase()}</span>${esc(m)}</button>`).join('')}</div>`
+      :`<div class="empty"><h3>Aún no hay motorizados registrados</h3><p>En Oficina › Motorizados agrega los nombres.</p><button class="btn" data-act="view" data-v="ofi">Ir a Oficina</button></div>`}
+      <p class="muted" style="margin:0;font-size:13px">Este celular recordará tu nombre. Puedes cambiarlo cuando quieras.</p></section>`;
+  }
+  const rec=porRecoger(),mios=enRuta(S.me),d=hoy();
+  const entHoy=eventosDe(d).filter(x=>x.e.tipo==='entrega'&&x.e.m===S.me).reverse();
+  const noHoy=eventosDe(d).filter(x=>x.e.tipo==='no_entrega'&&x.e.m===S.me).reverse();
+  const futuros=[...S.pedidos.values()].filter(p=>p.estado==='pendiente'&&(p.fechaPlan||'')>d).length;
+  const tab=S.motoTab;
+  let body='';
+  if(tab==='recoger'){
+    for(const id of [...S.sel])if(!rec.find(p=>p.id===id))S.sel.delete(id);
+    body=rec.length?`<div class="row spread"><span class="muted" style="font-size:13px">Marca los pedidos que te llevas en esta salida.</span>
+      <button class="btn ghost sm" data-act="selAll">${S.sel.size===rec.length?'Quitar todos':'Seleccionar todos'}</button></div>
+      <div class="list">${rec.map(cardRecoger).join('')}</div>`
+      :`<div class="empty"><h3>No hay pedidos por recoger</h3><p>Cuando la oficina cargue los pedidos del día aparecerán aquí.</p></div>`;
+    if(futuros)body+=`<p class="muted" style="font-size:13px;margin:0">${futuros} pedido${futuros>1?'s':''} reprogramado${futuros>1?'s':''} para otro día.</p>`;
+    renderBar(S.sel.size?`<div class="bar-in"><div class="grow"><b>${S.sel.size} pedido${S.sel.size>1?'s':''}</b><div class="muted" style="font-size:13px">Salida ${siguienteSalida(S.me)} de hoy</div></div><button class="btn primary" data-act="salidaAsk">${IC.truck}Me los llevo</button></div>`:'');
+  }else if(tab==='ruta'){
+    renderBar('');
+    body=mios.length?`<div class="list">${mios.map(cardRuta).join('')}</div>`:`<div class="empty"><h3>No tienes pedidos en ruta</h3><p>Ve a “Por recoger”, marca los que te llevas y toca “Me los llevo”.</p></div>`;
+  }else{
+    renderBar('');
+    const all=[...entHoy.map(x=>({...x,k:'e'})),...noHoy.map(x=>({...x,k:'n'}))].sort((a,b)=>a.e.t<b.e.t?1:-1);
+    body=all.length?`<div class="list">${all.map(x=>`<div class="card"><div class="card-head"><div class="grow"><div class="ord">${esc(x.p.order)} · Salida ${x.e.salida||'—'}</div><div class="who">${esc(x.p.receptor||x.p.cliente)}</div><div class="addr"><span class="dist">${esc(x.p.distrito)}</span></div></div>
+      ${x.k==='e'?`<span class="pill st-entregado">${hLocal(x.e.t)}</span>`:`<span class="pill st-noent">No entregado ${hLocal(x.e.t)}</span>`}</div>
+      ${x.k==='n'?`<div class="note bad">${esc(x.e.motivo)}${x.e.para?' · Reprogramado para el '+fechaCorta(x.e.para):''}</div>`:`<div class="meta"><span>Tiempo <b>${durTxt(minutosEntrega(x.p,x.e))}</b></span>${x.e.obs?`<span>${esc(x.e.obs)}</span>`:''}</div>`}</div>`).join('')}</div>`
+      :`<div class="empty"><h3>Aún no hay entregas hoy</h3><p>Lo que entregues aparecerá aquí con la hora.</p></div>`;
+  }
+  return `<div class="row spread"><div><div class="eyebrow">${esc(fechaLarga(d))}</div><h1>Hola, ${esc(S.me.split(' ')[0])}</h1></div><button class="btn ghost sm" data-act="cambiarMoto">Cambiar</button></div>
+  ${S.readOnly?'<div class="note bad">Solo puedes ver los pedidos. Para marcar recojos y entregas, la oficina debe invitarte por correo como Editor.</div>':''}
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="${tab==='recoger'}" data-act="motoTab" data-t="recoger">Por recoger <span class="count">${rec.length}</span></button>
+    <button role="tab" aria-selected="${tab==='ruta'}" data-act="motoTab" data-t="ruta">En ruta <span class="count">${mios.length}</span></button>
+    <button role="tab" aria-selected="${tab==='hechos'}" data-act="motoTab" data-t="hechos">Hoy <span class="count">${entHoy.length}</span></button>
+  </div>${body}`;
+}
+function itemsTxt(p){return (p.items||[]).map(i=>(i.q>1?i.q+'× ':'')+i.n).join(' · ')}
+function cardRecoger(p){
+  const sel=S.sel.has(p.id);
+  return `<div class="card ${sel?'sel':''}" data-act="toggle" data-id="${esc(p.id)}" role="checkbox" aria-checked="${sel}" tabindex="0">
+    <div class="card-head"><span class="check">${IC.check}</span>
+      <div class="grow"><div class="ord">${esc(p.order)} · ${p.unidades||0} und.</div><div class="who">${esc(p.receptor||p.cliente)}</div>
+      <div class="addr"><span class="dist">${esc(p.distrito)}</span> · ${esc(p.direccion)}</div></div>${(p.intentos||0)>0?pill(p):''}</div>
+    ${(p.intentos||0)>0&&p.motivo?`<div class="note">Intento anterior: ${esc(p.motivo)}</div>`:''}
+  </div>`;
+}
+function cardRuta(p){
+  const tel=p.telefono,nombre=(p.receptor||p.cliente||'').split(' ')[0];
+  const wa=waLink(tel,`Hola ${nombre}, le saluda el motorizado de Arena Perú. Estoy en camino con su pedido ${p.order}.`);
+  return `<div class="card">
+    <div class="card-head"><div class="grow"><div class="ord">${esc(p.order)} · Salida ${p.salida||'—'} · recogido ${hLocal(p.recogidoAt)}</div>
+      <div class="who">${esc(p.receptor||p.cliente)}</div>${p.receptor&&p.cliente&&p.receptor!==p.cliente?`<div class="muted" style="font-size:13px">Cliente: ${esc(p.cliente)}</div>`:''}</div></div>
+    <div class="addr"><span class="dist">${esc(p.distrito)}</span>${p.ciudad&&p.ciudad.toLowerCase()!=='lima'?' · '+esc(p.ciudad):''}<br>${esc(p.direccion)}${p.complemento?' · '+esc(p.complemento):''}${p.referencia?`<br><span class="muted">Ref: ${esc(p.referencia)}</span>`:''}</div>
+    ${p.items&&p.items.length?`<div class="items">${esc(itemsTxt(p))}</div>`:''}
+    ${tel?`<div class="mono" style="font-size:14px;user-select:all">${esc(telDisp(tel))}</div>`:''}
+    <div class="acts">
+      <a class="btn sm" href="${mapsLink(p)}" target="_blank" rel="noopener">${IC.map}Mapa</a>
+      ${wa?`<a class="btn sm" href="${wa}" target="_blank" rel="noopener">${IC.wa}WhatsApp</a>`:'<span></span>'}
+      ${tel?`<a class="btn sm" href="tel:${esc(String(tel).replace(/[^\d+]/g,''))}">${IC.phone}Llamar</a>`:'<span></span>'}
+    </div>
+    <div class="acts2"><button class="btn bad" data-act="noEntAsk" data-id="${esc(p.id)}" ${S.readOnly?'disabled':''}>No entregado</button><button class="btn ok" data-act="entAsk" data-id="${esc(p.id)}" ${S.readOnly?'disabled':''}>${IC.check}Entregado</button></div>
+  </div>`;
+}
+
+/* Oficina */
+function vOfi(){
+  renderBar('');
+  const t=S.ofiTab;
+  const head=`<div class="row spread"><div><div class="eyebrow">Arena Perú · Ecommerce</div><h1>Control de despachos</h1></div>
+    <div class="row"><button class="btn ghost sm" data-act="bloquear">Bloquear</button><button class="btn primary" data-act="importAsk" ${S.readOnly?'disabled':''}>${IC.up}Cargar Excel</button></div></div>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="${t==='dia'}" data-act="ofiTab" data-t="dia">Día</button>
+      <button role="tab" aria-selected="${t==='dash'}" data-act="ofiTab" data-t="dash">Dashboard</button>
+      <button role="tab" aria-selected="${t==='motos'}" data-act="ofiTab" data-t="motos">Motorizados <span class="count">${S.motos.length}</span></button>
+    </div>`;
+  if(t==='motos')return head+vMotos();
+  if(t==='dash')return head+vDash();
+  return head+vDia();
+}
+function vDia(){
+  const D=S.fecha,R=resumenDia(D),esHoy=D===hoy();
+  let lista=pedidosDelDia(D).sort(ordenRuta);
+  const enRutaN=lista.filter(p=>estadoEnDia(p,D)[0].startsWith('En ruta')).length;
+  const porRec=esHoy?porRecoger().length:R.pendientes.length;
+  const f=S.filtro;
+  lista=lista.filter(p=>{
+    const e=estadoEnDia(p,D)[0];
+    if(f==='rec')return e==='Por recoger'||e==='Reprogramado'||e==='Sin salir';
+    if(f==='ruta')return e.startsWith('En ruta');
+    if(f==='ent')return e==='Entregado';
+    if(f==='no')return (p.historial||[]).some(x=>x.tipo==='no_entrega'&&dLocal(x.t)===D);
+    return true;
+  });
+  if(S.q){const q=S.q.toLowerCase();lista=lista.filter(p=>[p.order,p.cliente,p.receptor,p.distrito,p.telefono].join(' ').toLowerCase().includes(q))}
+  const motos=Object.values(R.porMoto);
+  const jornada=motos.length?motos.map(m=>`<div class="kpi"><span class="l">${esc(m.m)}</span><span class="v num">${m.min!=null?hmm(m.min):'—'}</span><span class="l">${m.ini?hLocal(m.ini)+' → '+(m.fin?hLocal(m.fin):'…'):''} · ${m.salidas.size} salida${m.salidas.size!==1?'s':''}</span></div>`).join(''):'';
+  return `<div class="row">
+      <label class="fld" style="min-width:170px"><span>Fecha</span><input id="f-fecha" class="input" type="date" value="${D}" max="${hoy()}" data-act="fecha"></label>
+      <div class="grow"></div>
+      <button class="btn dark" data-act="excel">${IC.down}Descargar Excel del día</button>
+    </div>
+    <div><div class="eyebrow">${esc(fechaLarga(D))}${esHoy?' · hoy':''}</div></div>
+    <div class="kpis">
+      <div class="kpi"><span class="v num">${R.cargados.length}</span><span class="l">Cargados ese día</span></div>
+      <div class="kpi"><span class="v num">${R.llevados.length}</span><span class="l">Recogidos por motorizado</span></div>
+      <div class="kpi t-route"><span class="v num">${enRutaN}</span><span class="l">En ruta</span></div>
+      <div class="kpi t-ok"><span class="v num">${R.entregas.length}</span><span class="l">Entregados</span></div>
+      <div class="kpi t-bad"><span class="v num">${R.noEnt.length}</span><span class="l">No entregados</span></div>
+      <div class="kpi"><span class="v num">${porRec}</span><span class="l">${esHoy?'Por recoger':'Pendientes al cierre'}</span></div>
+    </div>
+    ${jornada?`<div><div class="eyebrow" style="margin-bottom:8px">Jornada: primer recojo a última entrega</div><div class="kpis">${jornada}</div></div>`:''}
+    <div class="row">
+      <div class="chips">${[['todos','Todos'],['rec','Por recoger'],['ruta','En ruta'],['ent','Entregados'],['no','No entregados']].map(([k,l])=>`<button class="chip" aria-pressed="${f===k}" data-act="filtro" data-f="${k}">${l}</button>`).join('')}</div>
+      <div class="grow" style="min-width:200px"><input id="f-q" class="input" type="search" placeholder="Buscar pedido, cliente, distrito…" value="${esc(S.q)}" data-act="q"></div>
+    </div>
+    ${lista.length?tablaDia(lista,D):`<div class="empty"><h3>${pedidosDelDia(D).length?'Ningún pedido con ese filtro':'No hay pedidos para esta fecha'}</h3>${!pedidosDelDia(D).length&&esHoy?'<p>Carga el Excel con los pedidos que se están alistando hoy. Los pendientes de días anteriores aparecen aquí solos.</p><button class="btn primary" data-act="importAsk">'+IC.up+'Cargar Excel</button>':''}</div>`}`;
+}
+function tablaDia(lista,D){
+  const rows=lista.map(p=>{
+    const [t,c]=estadoEnDia(p,D);
+    const evs=(p.historial||[]).filter(e=>dLocal(e.t)===D);
+    const rec=[...evs].reverse().find(e=>e.tipo==='recojo');
+    const ent=evs.find(e=>e.tipo==='entrega');
+    const no=[...evs].reverse().find(e=>e.tipo==='no_entrega');
+    const min=ent?minutosEntrega(p,ent):null;
+    const foto=ent&&ent.obs?`<span class="muted" style="font-size:12.5px">${esc(ent.obs)}</span>`:'';
+    return {p,t,c,rec,ent,no,min,foto};
+  });
+  const cards=`<div class="list only-sm">${rows.map(r=>`<div class="card"><div class="card-head"><div class="grow"><div class="ord">${esc(r.p.order)}</div><div class="who">${esc(r.p.receptor||r.p.cliente)}</div><div class="addr"><span class="dist">${esc(r.p.distrito)}</span> · ${esc(r.p.direccion)}</div></div><span class="pill ${r.c}">${r.t}</span></div>
+    <div class="meta">${r.rec?`<span>${esc(r.rec.m)} · S${r.rec.salida||1}</span><span>Recojo <b>${hLocal(r.rec.t)}</b></span>`:''}${r.ent?`<span>Entrega <b>${hLocal(r.ent.t)}</b></span><span>Tiempo <b>${durTxt(r.min)}</b></span>`:''}</div>
+    ${r.no?`<div class="note bad">${esc(r.no.motivo)}${r.no.obs?' · '+esc(r.no.obs):''}${r.no.para?' · para el '+fechaCorta(r.no.para):''}</div>`:''}
+    <div class="row">${r.foto}<div class="grow"></div><button class="btn ghost sm" data-act="detalle" data-id="${esc(r.p.id)}">Detalle</button></div></div>`).join('')}</div>`;
+  const table=`<div class="tbl-wrap only-lg"><table><thead><tr><th>Pedido</th><th>Cliente / destino</th><th>Estado</th><th>Motorizado</th><th>Recojo</th><th>Entrega</th><th>Tiempo</th><th>Observación</th><th></th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td class="t">${esc(r.p.order)}</td><td><b>${esc(r.p.receptor||r.p.cliente)}</b><br><span class="muted">${esc(r.p.distrito)} · ${esc(r.p.direccion)}</span>${r.no?`<br><span style="color:var(--bad);font-size:12.5px">${esc(r.no.motivo)}${r.no.para?' · para el '+fechaCorta(r.no.para):''}</span>`:''}</td>
+    <td><span class="pill ${r.c}">${r.t}</span></td><td>${r.rec?esc(r.rec.m)+'<br><span class="muted">Salida '+(r.rec.salida||1)+'</span>':'<span class="muted">—</span>'}</td>
+    <td class="t">${r.rec?hLocal(r.rec.t):''}</td><td class="t">${r.ent?hLocal(r.ent.t):''}</td><td class="t">${r.ent?durTxt(r.min):''}</td><td>${r.foto}</td>
+    <td><button class="btn ghost sm" data-act="detalle" data-id="${esc(r.p.id)}">Detalle</button></td></tr>`).join('')}</tbody></table></div>`;
+  return cards+table;
+}
+function vMotos(){
+  return `<section class="panel" style="max-width:560px"><div><h2>Motorizados</h2><p class="muted" style="margin:4px 0 0;font-size:14px">Cada motorizado elige su nombre la primera vez que abre la app en su celular. Agrega aquí al de apoyo en campañas.</p></div>
+    <div class="list">${S.motos.map(m=>`<div class="row" style="border:1px solid var(--line);border-radius:10px;padding:8px 8px 8px 12px"><span class="avatar" style="width:30px;height:30px;font-size:13px">${esc(m[0]||'?').toUpperCase()}</span><b class="grow">${esc(m)}</b><button class="btn ghost sm" data-act="motoDel" data-m="${esc(m)}" ${S.readOnly?'disabled':''}>Quitar</button></div>`).join('')||'<p class="muted">Aún no hay motorizados.</p>'}</div>
+    <form class="row" data-form="motoAdd"><input id="f-moto" class="input grow" placeholder="Nombre del motorizado" maxlength="40" required><button class="btn primary" type="submit" ${S.readOnly?'disabled':''}>Agregar</button></form>
+  </section>`;
+}
+
+/* Dashboard */
+function vDash(){
+  const fin=hoy(),ini=addDays(fin,-(S.rango-1));
+  const ent=[],noe=[],dias={},motos={},distr={},motivos={},jornadas={};
+  for(const p of S.pedidos.values()){
+    let previoNo=false;
+    for(const e of p.historial||[]){
+      const d=dLocal(e.t);
+      if(e.tipo==='no_entrega'){if(d>=ini&&d<=fin){noe.push({p,e});motivos[e.motivo||'Otro']=(motivos[e.motivo||'Otro']||0)+1;const k=d+'|'+e.m;(jornadas[k]=jornadas[k]||{ini:null,fin:null});if(!jornadas[k].fin||e.t>jornadas[k].fin)jornadas[k].fin=e.t;(motos[e.m]=motos[e.m]||{n:0,no:0,min:[]}).no++}previoNo=true;continue}
+      if(e.tipo==='recojo'&&d>=ini&&d<=fin){const k=d+'|'+e.m;(jornadas[k]=jornadas[k]||{ini:null,fin:null});if(!jornadas[k].ini||e.t<jornadas[k].ini)jornadas[k].ini=e.t}
+      if(e.tipo!=='entrega'||d<ini||d>fin)continue;
+      const min=minutosEntrega(p,e),dd=diffDays(p.fechaCarga,d);
+      ent.push({p,e,min,dd,primer:!previoNo});
+      dias[d]=(dias[d]||0)+1;
+      const mm=motos[e.m]=motos[e.m]||{n:0,no:0,min:[]};mm.n++;if(min!=null)mm.min.push(min);
+      const ds=(p.distrito||'Sin distrito').trim().toUpperCase();const di=distr[ds]=distr[ds]||{n:0,min:[]};di.n++;if(min!=null)di.min.push(min);
+      const k=d+'|'+e.m;(jornadas[k]=jornadas[k]||{ini:null,fin:null});if(!jornadas[k].fin||e.t>jornadas[k].fin)jornadas[k].fin=e.t;
+    }
+  }
+  const N=ent.length;
+  const pct=(a,b)=>b?Math.round(a/b*100):0;
+  const avg=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:null;
+  const mins=ent.map(x=>x.min).filter(x=>x!=null);
+  const B=[['Menos de 1 h',0,60,'ok'],['1 a 2 h',60,120,'ok'],['2 a 3 h',120,180,''],['3 a 4 h',180,240,'warn'],['Más de 4 h',240,1e9,'bad']];
+  const bucket=B.map(([l,a,b,c])=>({l,c,n:mins.filter(m=>m>=a&&m<b).length}));
+  const dd=[['Mismo día de carga',x=>x.dd<=0,'ok'],['Al día siguiente',x=>x.dd===1,''],['2 días después',x=>x.dd===2,'warn'],['3 días o más',x=>x.dd>=3,'bad']].map(([l,f,c])=>({l,c,n:ent.filter(f).length}));
+  const jl=Object.values(jornadas).filter(j=>j.ini&&j.fin&&j.fin>j.ini).map(j=>(Date.parse(j.fin)-Date.parse(j.ini))/60000);
+  const bars=(arr,tot)=>`<div class="bars">${arr.map(x=>`<div class="bar-row"><span>${esc(x.l)}</span><div class="bar-track"><div class="bar-fill ${x.c||''}" style="width:${pct(x.n,tot)}%"></div></div><span class="pct">${pct(x.n,tot)}%</span></div>`).join('')}</div>`;
+  const diasArr=[];for(let i=S.rango-1;i>=0;i--){const d=addDays(fin,-i);diasArr.push([d,dias[d]||0])}
+  const mx=Math.max(1,...diasArr.map(x=>x[1]));
+  const motivoArr=Object.entries(motivos).sort((a,b)=>b[1]-a[1]).map(([l,n])=>({l,n,c:'bad'}));
+  const distArr=Object.entries(distr).sort((a,b)=>b[1].n-a[1].n).slice(0,8);
+  if(!N&&!noe.length)return `<div class="row"><div class="chips">${[7,30,90].map(r=>`<button class="chip" aria-pressed="${S.rango===r}" data-act="rango" data-r="${r}">Últimos ${r} días</button>`).join('')}</div></div>
+    <div class="empty"><h3>Todavía no hay entregas en este periodo</h3><p>Cuando el motorizado marque entregas, aquí verás qué porcentaje se entrega en menos de 1 hora, de 1 a 2 horas, y así.</p></div>`;
+  return `<div class="row"><div class="chips">${[7,30,90].map(r=>`<button class="chip" aria-pressed="${S.rango===r}" data-act="rango" data-r="${r}">Últimos ${r} días</button>`).join('')}</div><span class="muted" style="font-size:13px">${fechaCorta(ini)} – ${fechaCorta(fin)}</span></div>
+  <div class="kpis">
+    <div class="kpi t-ok"><span class="v num">${N}</span><span class="l">Entregas</span></div>
+    <div class="kpi"><span class="v num">${pct(N,N+noe.length)}%</span><span class="l">Efectividad (entregados / intentos)</span></div>
+    <div class="kpi"><span class="v num">${pct(ent.filter(x=>x.primer).length,N)}%</span><span class="l">Entregados al primer intento</span></div>
+    <div class="kpi t-route"><span class="v num">${hmm(avg(mins))||'—'}</span><span class="l">Tiempo promedio recojo → entrega</span></div>
+    <div class="kpi"><span class="v num">${hmm(avg(jl))||'—'}</span><span class="l">Jornada promedio por día</span></div>
+  </div>
+  <div class="grid2">
+    <section class="panel"><div><h2>Tiempo de entrega</h2><p class="muted" style="margin:2px 0 0;font-size:13px">Desde que el motorizado recoge hasta que marca entregado · ${mins.length} entregas</p></div>${bars(bucket,mins.length)}</section>
+    <section class="panel"><div><h2>Días desde la carga</h2><p class="muted" style="margin:2px 0 0;font-size:13px">Cuántos días pasaron entre el Excel del día y la entrega</p></div>${bars(dd,N)}</section>
+    <section class="panel"><div><h2>Entregas por día</h2></div><div class="cols">${diasArr.map(([d,n])=>`<div class="col" title="${fechaCorta(d)}: ${n}">${S.rango<=30&&n?`<span>${n}</span>`:''}<i style="height:${n/mx*100}%"></i></div>`).join('')}</div><div class="cols-x"><span>${fechaCorta(ini).slice(0,5)}</span><span>${fechaCorta(fin).slice(0,5)}</span></div></section>
+    <section class="panel"><div><h2>Por motorizado</h2></div><div class="tbl-wrap" style="border:0"><table><thead><tr><th>Motorizado</th><th>Entregas</th><th>No entregados</th><th>Efectividad</th><th>Tiempo prom.</th></tr></thead><tbody>
+      ${Object.entries(motos).map(([m,x])=>`<tr><td><b>${esc(m)}</b></td><td class="t">${x.n}</td><td class="t">${x.no}</td><td class="t">${pct(x.n,x.n+x.no)}%</td><td class="t">${durTxt(avg(x.min))}</td></tr>`).join('')}</tbody></table></div></section>
+    <section class="panel"><div><h2>Distritos con más entregas</h2></div><div class="tbl-wrap" style="border:0"><table><thead><tr><th>Distrito</th><th>Entregas</th><th>% del total</th><th>Tiempo prom.</th></tr></thead><tbody>
+      ${distArr.map(([d,x])=>`<tr><td>${esc(d)}</td><td class="t">${x.n}</td><td class="t">${pct(x.n,N)}%</td><td class="t">${durTxt(avg(x.min))}</td></tr>`).join('')}</tbody></table></div></section>
+    <section class="panel"><div><h2>Motivos de no entrega</h2><p class="muted" style="margin:2px 0 0;font-size:13px">${noe.length} intentos fallidos</p></div>${motivoArr.length?bars(motivoArr,noe.length):'<p class="muted">Sin intentos fallidos en este periodo.</p>'}</section>
+  </div>`;
+}
+
+/* ---------- sheets ---------- */
+function openSheet(s){S.sheet=s;renderSheet()}
+function closeSheet(){S.sheet=null;S.busy=false;document.getElementById('sheet').innerHTML=''}
+function renderSheet(){
+  const s=S.sheet,host=document.getElementById('sheet');
+  if(!s){host.innerHTML='';return}
+  let h='';
+  const p=s.id?S.pedidos.get(s.id):null;
+  if(s.k==='salida'){
+    const ps=[...S.sel].map(id=>S.pedidos.get(id)).filter(Boolean);
+    h=`<div><div class="eyebrow">Salida ${siguienteSalida(S.me)} · ${hLocal(Date.now())}</div><h2>¿Te llevas estos ${ps.length} pedidos?</h2></div>
+      <div class="imp-list">${ps.map(p=>`<div class="imp-row" style="grid-template-columns:1fr auto"><span><b>${esc(p.receptor||p.cliente)}</b><br><span class="muted">${esc(p.distrito)}</span></span><span class="ord">${esc(p.order)}</span></div>`).join('')}</div>
+      <p class="muted" style="margin:0;font-size:13px">Se guardará la hora de recojo. Los demás quedan en “Por recoger”.</p>
+      <div class="acts2"><button class="btn" data-act="close">Volver</button><button class="btn primary" data-act="salidaGo" ${S.busy?'disabled':''}>${S.busy?'Guardando…':'Sí, me los llevo'}</button></div>`;
+  }else if(s.k==='ent'&&p){
+    h=`<div><div class="eyebrow">${esc(p.order)} · ${esc(p.distrito)}</div><h2>¿Entregaste a ${esc(p.receptor||p.cliente)}?</h2></div>
+      <label class="fld"><span>¿Quién recibió? (opcional)</span><textarea id="f-obs" class="input" placeholder="Ej.: recibió el portero">${esc(s.obs||'')}</textarea></label>
+      <div class="acts2"><button class="btn" data-act="close">Cancelar</button><button class="btn ok" data-act="entGo" ${S.busy?'disabled':''}>${S.busy?'Guardando…':'Sí, entregado'}</button></div>
+      <p class="muted" style="margin:0;font-size:12.5px;text-align:center">La hora de entrega se guarda al confirmar: ${hLocal(Date.now())}.</p>`;
+  }else if(s.k==='no'&&p){
+    const man=addDays(hoy(),1);
+    h=`<div><div class="eyebrow">${esc(p.order)}</div><h2>No se entregó a ${esc(p.receptor||p.cliente)}</h2></div>
+      <div><div class="eyebrow" style="margin-bottom:8px">¿Qué pasó?</div><div class="chips">${MOTIVOS.map(m=>`<button class="chip" aria-pressed="${s.motivo===m}" data-act="motivo" data-m="${esc(m)}">${esc(m)}</button>`).join('')}</div></div>
+      <label class="fld"><span>Detalle ${s.motivo==='Otro'?'(obligatorio)':'(opcional)'}</span><textarea id="f-obs" class="input" placeholder="Ej.: toqué 3 veces, nadie respondió">${esc(s.obs||'')}</textarea></label>
+      <label class="fld"><span>Reprogramar entrega para</span><input id="f-para" class="input" type="date" min="${hoy()}" value="${s.para||man}"></label>
+      <div class="acts2"><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="noGo" ${!s.motivo||S.busy?'disabled':''}>${S.busy?'Guardando…':'Reprogramar'}</button></div>
+      <button class="btn ghost sm" data-act="devolver" data-id="${esc(p.id)}">Lo llevé por error: devolver a “Por recoger” sin registrar intento</button>`;
+  }else if(s.k==='detalle'&&p){
+    const tipos={carga:'Cargado',recojo:'Recogido',entrega:'Entregado',no_entrega:'No entregado',devuelto:'Devuelto a almacén',reabrir:'Reabierto'};
+    h=`<div class="row spread"><div><div class="eyebrow">${esc(p.order)}</div><h2>${esc(p.receptor||p.cliente)}</h2></div>${pill(p)}</div>
+      <div class="addr"><span class="dist">${esc(p.distrito)}</span> · ${esc(p.ciudad)}<br>${esc(p.direccion)}${p.complemento?' · '+esc(p.complemento):''}${p.referencia?'<br>Ref: '+esc(p.referencia):''}</div>
+      <div class="meta"><span>Tel. <b class="mono">${esc(telDisp(p.telefono))||'—'}</b></span><span>${p.unidades||0} und.</span>${p.total?`<span>S/ <b>${Number(p.total).toFixed(2)}</b></span>`:''}<span>Cargado <b>${fechaCorta(p.fechaCarga)}</b></span>${p.fechaPlan&&p.fechaPlan!==p.fechaCarga?`<span>Programado <b>${fechaCorta(p.fechaPlan)}</b></span>`:''}</div>
+      ${p.items&&p.items.length?`<div class="items">${esc(itemsTxt(p))}</div>`:''}
+      <div><div class="eyebrow" style="margin-bottom:6px">Historial</div><div class="imp-list" style="max-height:220px">${(p.historial||[]).map(e=>`<div class="imp-row" style="grid-template-columns:auto 1fr"><span class="mono" style="font-size:12px">${fechaCorta(dLocal(e.t)).slice(0,5)} ${hLocal(e.t)}</span><span><b>${tipos[e.tipo]||e.tipo}</b>${e.m?' · '+esc(e.m):''}${e.salida?' · salida '+e.salida:''}${e.motivo?' · '+esc(e.motivo):''}${e.obs?' · '+esc(e.obs):''}${e.para?' · para el '+fechaCorta(e.para):''}</span></div>`).join('')}</div></div>
+      ${s.confirmDel?`<div class="note bad">¿Eliminar el pedido ${esc(p.order)} de la app? No se puede deshacer.</div><div class="acts2"><button class="btn" data-act="detalle" data-id="${esc(p.id)}">No</button><button class="btn bad" data-act="delGo" data-id="${esc(p.id)}">Sí, eliminar</button></div>`
+      :`<div class="acts2">${p.estado!=='pendiente'?`<button class="btn" data-act="reabrir" data-id="${esc(p.id)}" ${S.readOnly?'disabled':''}>Volver a “Por recoger”</button>`:'<span></span>'}<button class="btn bad" data-act="delAsk" data-id="${esc(p.id)}" ${S.readOnly?'disabled':''}>Eliminar pedido</button></div>`}
+      <button class="btn" data-act="close">Cerrar</button>`;
+  }else if(s.k==='import'){h=sheetImport(s)}
+  else if(s.k==='msg'){h=`<h2>${esc(s.title)}</h2><p style="margin:0">${esc(s.text)}</p><button class="btn" data-act="close">Entendido</button>`}
+  host.innerHTML=`<div class="scrim" data-act="scrim"><div class="sheet ${s.k==='import'?'wide':''}" role="dialog" aria-modal="true">${h}</div></div>`;
+}
+
+/* ---------- import ---------- */
+function loadScript(src){return new Promise((ok,ko)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=()=>ko(new Error('No se pudo cargar '+src));document.head.appendChild(s)})}
+let xlsxP=null,exceljsP=null;
+const needXLSX=()=>window.XLSX?Promise.resolve():xlsxP||(xlsxP=loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'));
+const needExcelJS=()=>window.ExcelJS?Promise.resolve():exceljsP||(exceljsP=loadScript('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'));
+const norm=s=>String(s||'').replace(/^﻿/,'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+const ALIAS={
+  order:['order','pedido','nropedido','npedido','numeropedido','nrodepedido','numerodepedido','orden','idpedido','orderid','ordenid','codigopedido'],
+  nombre:['clientname','nombre','nombres','cliente','nombrecliente','nombredelcliente'],
+  apellido:['clientlastname','apellido','apellidos'],
+  telefono:['phone','telefono','celular','movil','tel','telefonocliente','whatsapp'],
+  street:['street','direccion','calle','address','direcciondeentrega'],
+  number:['number','numero','nro','numerocasa'],
+  complemento:['complement','complemento','dpto','interior','departamentointerior'],
+  distrito:['neighborhood','distrito','barrio','urbanizacion'],
+  ciudad:['city','ciudad','provincia'],
+  depto:['uf','departamento','region'],
+  referencia:['reference','referencia','ref'],
+  receptor:['receivername','receptor','recibe','destinatario','quienrecibe','nombrereceptor'],
+  sku:['skuname','producto','descripcion','articulo','item','productos'],
+  qty:['quantitysku','cantidad','qty','unidades','cant'],
+  total:['totalvalue','total','monto','importe','montototal','valortotal'],
+  fecha:['creationdate','fecha','fechapedido','fechadecreacion','fechadeventa'],
+  estado:['status','estado','estadopedido'],
+  courier:['courrier','courier','transportista','tipodeenvio'],
+  sla:['slatype','tipodeentrega','modalidad']
+};
+function mapHeaders(hs){const m={};const nh=hs.map(norm);for(const [k,al] of Object.entries(ALIAS)){const i=nh.findIndex(h=>al.includes(h));if(i>=0)m[k]=hs[i]}return m}
+async function leerArchivo(file){
+  await needXLSX();
+  let wb;
+  if(/\.(csv|txt)$/i.test(file.name)){
+    let txt=await file.text();txt=txt.replace(/^﻿/,'');
+    const first=txt.split(/\r?\n/,1)[0]||'';
+    const FS=(first.split(';').length>first.split(',').length)?';':((first.split('\t').length>first.split(',').length)?'\t':',');
+    wb=XLSX.read(txt,{type:'string',FS,raw:true});
+  }else{
+    wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});
+  }
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
+  if(!rows.length)throw new Error('El archivo no tiene filas.');
+  const H=mapHeaders(Object.keys(rows[0]));
+  if(!H.order)throw new Error('No encontré la columna del número de pedido. El Excel debe tener una columna “Order” (exportación VTEX) o “Pedido”.');
+  const g=new Map();
+  for(const r of rows){
+    const o=String(r[H.order]||'').trim();if(!o)continue;
+    const v=k=>H[k]?String(r[H[k]]??'').trim():'';
+    let x=g.get(o);
+    if(!x){
+      const fRaw=v('fecha');let f='';
+      if(fRaw){const t=Date.parse(fRaw.replace(' ','T'));if(!isNaN(t))f=dLocal(t);else{const m=fRaw.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);if(m)f=(m[3].length===2?'20'+m[3]:m[3])+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0')}}
+      const dir=[v('street'),v('number')].filter(Boolean).join(' ');
+      x={order:o,cliente:[v('nombre'),v('apellido')].filter(Boolean).join(' '),receptor:v('receptor'),telefono:v('telefono'),direccion:dir,complemento:v('complemento'),referencia:v('referencia'),
+         distrito:v('distrito'),ciudad:v('ciudad'),depto:v('depto'),estadoOrigen:v('estado'),courier:v('courier'),fechaPedido:f,items:[],unidades:0,total:0};
+      g.set(o,x);
+    }
+    const q=parseInt(v('qty'))||1,n=v('sku');
+    if(n){x.items.push({n:n.slice(0,80),q});x.unidades+=q}else if(!x.items.length)x.unidades+=q;
+    const t=parseFloat(String(v('total')).replace(',','.'));if(!isNaN(t))x.total=Math.max(x.total,t);
+  }
+  return [...g.values()];
+}
+function sheetImport(s){
+  if(s.step==='pick')return `<div><div class="eyebrow">Paso 1 de 2</div><h2>Cargar pedidos del día</h2></div>
+    <div class="photo-drop" style="min-height:150px"><div>${IC.up.replace('<svg','<svg style="width:34px;height:34px"')}<div style="font-weight:700;color:var(--ink);margin-top:6px">Elegir archivo Excel o CSV</div><div style="font-size:13px">La exportación de pedidos de VTEX funciona tal cual</div></div><input id="f-file" type="file" accept=".xlsx,.xls,.csv,.txt" data-act="file" aria-label="Archivo de pedidos"></div>
+    ${s.error?`<div class="note bad">${esc(s.error)}</div>`:''}${s.loading?'<p class="muted" style="margin:0">Leyendo archivo…</p>':''}
+    <p class="muted" style="margin:0;font-size:13px">Columnas que uso: Order, Client Name, Client Last Name, Phone, Receiver Name, Street, Number, Complement, Neighborhood, City, Reference, SKU Name, Quantity_SKU, Total Value, Creation Date y Status. Si usas tu propio formato, sirven nombres como Pedido, Cliente, Teléfono, Dirección, Distrito, Referencia.</p>
+    <button class="btn" data-act="close">Cancelar</button>`;
+  if(s.step==='saving')return `<h2>Guardando pedidos…</h2><div class="progress"><i style="width:${Math.round(s.done/s.total*100)}%"></i></div><p class="muted" style="margin:0">${s.done} de ${s.total}</p>`;
+  const vis=visiblesImport(s);
+  const nSel=vis.filter(x=>s.sel.has(x.order)&&!x.existe).length;
+  return `<div><div class="eyebrow">Paso 2 de 2 · ${esc(s.fileName)}</div><h2>${s.rows.length} pedidos en el archivo</h2></div>
+    <div class="row">
+      <label class="fld" style="flex:1;min-width:140px"><span>Pedidos creados desde</span><input id="f-ini" class="input" type="date" value="${s.ini}" data-act="impIni"></label>
+      <label class="fld" style="flex:1;min-width:140px"><span>hasta</span><input id="f-fin" class="input" type="date" value="${s.fin}" data-act="impFin"></label>
+      <label class="fld" style="flex:1;min-width:140px"><span>Fecha de despacho</span><input id="f-desp" class="input" type="date" value="${s.desp}" data-act="impDesp"></label>
+    </div>
+    ${s.hayCancel?`<label class="row" style="font-size:14px"><input type="checkbox" id="f-cancel" data-act="impCancel" ${s.omitirCancel?'checked':''} style="width:18px;height:18px"> Omitir pedidos cancelados</label>`:''}
+    <div class="row spread"><span class="muted" style="font-size:13px">${vis.length} en el rango · ${vis.filter(x=>x.existe).length} ya estaban cargados</span><button class="btn ghost sm" data-act="impAll">Marcar / desmarcar todos</button></div>
+    <div class="imp-list">${vis.length?vis.map(x=>`<label class="imp-row"><input type="checkbox" data-act="impSel" data-o="${esc(x.order)}" ${x.existe?'disabled':''} ${s.sel.has(x.order)&&!x.existe?'checked':''}><span><b>${esc(x.receptor||x.cliente)}</b> · <span class="muted">${esc(x.distrito)}</span><br><span class="ord">${esc(x.order)}</span> <span class="muted" style="font-size:12px">${fechaCorta(x.fechaPedido)} · ${x.unidades} und.</span></span>${x.existe?'<span class="pill st-pendiente">Ya cargado</span>':(/cancel/i.test(x.estadoOrigen)?'<span class="pill st-noent">Cancelado</span>':'')}</label>`).join(''):'<div class="imp-row" style="grid-template-columns:1fr"><span class="muted">Ningún pedido en ese rango de fechas.</span></div>'}</div>
+    <div class="acts2"><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="impGo" ${nSel?'':'disabled'}>Cargar ${nSel} pedido${nSel!==1?'s':''}</button></div>`;
+}
+function visiblesImport(s){return s.rows.filter(x=>(!x.fechaPedido||(x.fechaPedido>=s.ini&&x.fechaPedido<=s.fin))&&!(s.omitirCancel&&/cancel/i.test(x.estadoOrigen)))}
+async function prepararImport(file){
+  const s=S.sheet;s.loading=true;s.error='';renderSheet();
+  try{
+    const rows=await leerArchivo(file);
+    for(const r of rows)r.existe=S.pedidos.has(idDe(r.order));
+    const fechas=rows.map(r=>r.fechaPedido).filter(Boolean).sort();
+    const max=fechas[fechas.length-1]||hoy();
+    Object.assign(s,{step:'review',rows,fileName:file.name,ini:fechas.length>1&&rows.length<=80?fechas[0]:max,fin:max,desp:hoy(),omitirCancel:true,hayCancel:rows.some(r=>/cancel/i.test(r.estadoOrigen)),sel:new Set(rows.filter(r=>!r.existe).map(r=>r.order)),loading:false});
+  }catch(e){s.loading=false;s.error=e.message||'No se pudo leer el archivo.'}
+  renderSheet();
+}
+const idDe=o=>String(o).replace(/[^A-Za-z0-9_\-.~:@+]/g,'_').slice(0,180);
+async function guardarImport(){
+  const s=S.sheet;const lista=visiblesImport(s).filter(x=>s.sel.has(x.order)&&!x.existe);
+  s.step='saving';s.total=lista.length;s.done=0;renderSheet();
+  let ok=0,dup=0,err=null;
+  for(const x of lista){
+    const id=idDe(x.order);
+    try{
+      const ref=S.db.doc('pedidos/'+id);
+      const ex=await ref.get();
+      if(ex.exists){dup++}else{
+        const t=nowISO();
+        await ref.set({id,order:x.order,cliente:x.cliente,receptor:x.receptor,telefono:x.telefono,direccion:x.direccion,complemento:x.complemento,referencia:x.referencia,distrito:x.distrito,ciudad:x.ciudad,depto:x.depto,
+          items:x.items.slice(0,30),unidades:x.unidades,total:x.total,fechaPedido:x.fechaPedido,courier:x.courier,
+          fechaCarga:s.desp,fechaPlan:s.desp,estado:'pendiente',intentos:0,motorizado:'',salida:0,recogidoAt:'',entregadoAt:'',motivo:'',
+          historial:[{t,tipo:'carga'}],cargadoAt:t,actualizado:t});
+        ok++;
+      }
+    }catch(e){err=e;break}
+    s.done++;renderSheet();
+  }
+  closeSheet();
+  if(err)openSheet({k:'msg',title:'La carga se detuvo',text:`Se guardaron ${ok} pedidos. ${errMsg(err)}`});
+  else toast(`${ok} pedido${ok!==1?'s':''} cargado${ok!==1?'s':''}${dup?` · ${dup} ya existían`:''}`);
+  S.fecha=s.desp;S.ofiTab='dia';render();
+}
+
+/* ---------- Excel ---------- */
+async function descargarExcel(){
+  toast('Preparando Excel…');
+  try{await needExcelJS()}catch(e){toast('No se pudo preparar el Excel. Revisa tu conexión.');return}
+  const D=S.fecha,R=resumenDia(D);
+  const wb=new ExcelJS.Workbook();wb.creator='Arena Perú';wb.created=new Date();
+  const NEGRO='FF0B0C0E',AZUL='FF0050B5',GRIS='FFF1F3F6';
+  const head=(ws,cols)=>{ws.columns=cols.map(([h,w])=>({header:h,width:w}));const r=ws.getRow(1);r.height=22;r.eachCell(c=>{c.font={bold:true,color:{argb:'FFFFFFFF'},name:'Arial',size:10};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NEGRO}};c.alignment={vertical:'middle',wrapText:true}});ws.views=[{state:'frozen',ySplit:1}];ws.autoFilter={from:{row:1,column:1},to:{row:1,column:cols.length}}};
+  const zebra=ws=>ws.eachRow((r,i)=>{if(i>1){r.font={name:'Arial',size:10};r.alignment={vertical:'top',wrapText:true};if(i%2===0)r.eachCell({includeEmpty:true},c=>c.fill={type:'pattern',pattern:'solid',fgColor:{argb:GRIS}})}});
+  // Resumen
+  const ws=wb.addWorksheet('Resumen',{views:[{showGridLines:false}]});
+  ws.columns=[{width:26},{width:10},{width:14},{width:15},{width:16},{width:12},{width:12},{width:14},{width:13}];
+  ws.mergeCells('A1:I1');ws.getCell('A1').value='ARENA PERÚ · Reporte de despachos';ws.getCell('A1').font={bold:true,size:16,name:'Arial',color:{argb:'FFFFFFFF'}};ws.getCell('A1').fill={type:'pattern',pattern:'solid',fgColor:{argb:NEGRO}};ws.getRow(1).height=30;ws.getCell('A1').alignment={vertical:'middle',indent:1};
+  ws.mergeCells('A2:I2');ws.getCell('A2').value=fechaLarga(D).replace(/^./,c=>c.toUpperCase())+' · '+fechaCorta(D);ws.getCell('A2').font={size:11,name:'Arial',color:{argb:'FF596372'}};
+  const motos=Object.values(R.porMoto);
+  const tot=[['Pedidos cargados ese día',R.cargados.length],['Pedidos que se llevó el motorizado',R.llevados.length],['Entregados',R.entregas.length],['No entregados (reprogramados)',R.noEnt.length],['Pendientes al cierre del día',R.pendientes.length],['Horas en ruta (suma de motorizados)',hmm(motos.reduce((s,m)=>s+(m.min||0),0))||'0:00']];
+  let r=4;ws.getCell('A'+r).value='TOTALES DEL DÍA';ws.getCell('A'+r).font={bold:true,name:'Arial',color:{argb:AZUL}};r++;
+  for(const [l,v] of tot){ws.getCell('A'+r).value=l;ws.getCell('B'+r).value=v;ws.getCell('A'+r).font={name:'Arial',size:10};ws.getCell('B'+r).font={bold:true,name:'Arial',size:11};ws.getCell('B'+r).alignment={horizontal:'right'};r++}
+  r++;ws.getCell('A'+r).value='JORNADA POR MOTORIZADO';ws.getCell('A'+r).font={bold:true,name:'Arial',color:{argb:AZUL}};r++;
+  const hdr=['Motorizado','Salidas','Primer recojo','Última entrega','Horas en ruta (h:mm)','Llevados','Entregados','No entregados','Efectividad'];
+  hdr.forEach((h,i)=>{const c=ws.getRow(r).getCell(i+1);c.value=h;c.font={bold:true,color:{argb:'FFFFFFFF'},name:'Arial',size:10};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NEGRO}};c.alignment={wrapText:true,vertical:'middle'}});ws.getRow(r).height=28;r++;
+  for(const m of motos){ws.getRow(r).values=[m.m,m.salidas.size,hLocal(m.ini),hLocal(m.fin),m.min!=null?hmm(m.min):'',m.llevados,m.entregados,m.noEnt,(m.entregados+m.noEnt)?Math.round(m.entregados/(m.entregados+m.noEnt)*100)/100:''];ws.getRow(r).getCell(9).numFmt='0%';ws.getRow(r).font={name:'Arial',size:10};r++}
+  if(!motos.length){ws.getCell('A'+r).value='Sin recojos registrados este día';ws.getCell('A'+r).font={italic:true,name:'Arial',size:10,color:{argb:'FF596372'}};r++}
+  r++;ws.getCell('A'+r).value='Horas en ruta = desde el primer recojo hasta la última entrega o intento del día.';ws.getCell('A'+r).font={italic:true,size:9,name:'Arial',color:{argb:'FF596372'}};
+  // Llevados
+  const w2=wb.addWorksheet('Llevados');
+  head(w2,[['Salida',8],['Motorizado',18],['Hora recojo',11],['Pedido',20],['Cliente / recibe',26],['Distrito',18],['Dirección',36],['Teléfono',14],['Unid.',7],['Resultado del día',18],['Hora entrega',11],['Tiempo (min)',11]]);
+  for(const {p,e} of R.llevados){
+    const sig=(p.historial||[]).find(x=>x.t>e.t&&['entrega','no_entrega','devuelto'].includes(x.tipo)&&dLocal(x.t)===D);
+    const res=sig?(sig.tipo==='entrega'?'Entregado':sig.tipo==='no_entrega'?'No entregado':'Devuelto a almacén'):'En ruta al cierre';
+    w2.addRow([e.salida||1,e.m,hLocal(e.t),p.order,p.receptor||p.cliente,p.distrito,[p.direccion,p.complemento].filter(Boolean).join(' · '),telDisp(p.telefono),p.unidades,res,sig&&sig.tipo==='entrega'?hLocal(sig.t):'',sig&&sig.tipo==='entrega'?Math.round((Date.parse(sig.t)-Date.parse(e.t))/60000):'']);
+  }
+  zebra(w2);
+  // Entregados
+  const w3=wb.addWorksheet('Entregados');
+  head(w3,[['Pedido',20],['Cliente',24],['Recibe',24],['Distrito',18],['Motorizado',18],['Salida',8],['Hora recojo',11],['Hora entrega',11],['Tiempo (h:mm)',12],['Tiempo (min)',11],['Quién recibió / obs.',30]]);
+  for(const {p,e} of R.entregas){const rc=ultimoRecojoAntes(p,e.t);const mn=minutosEntrega(p,e);w3.addRow([p.order,p.cliente,p.receptor,p.distrito,e.m,e.salida||'',rc?hLocal(rc.t):'',hLocal(e.t),hmm(mn),mn!=null?Math.round(mn):'',e.obs||''])}
+  zebra(w3);
+  // No entregados
+  const w4=wb.addWorksheet('No entregados');
+  head(w4,[['Pedido',20],['Cliente / recibe',26],['Distrito',18],['Teléfono',14],['Motorizado',18],['Salida',8],['Hora',9],['Motivo',30],['Detalle',34],['Reprogramado para',16]]);
+  for(const {p,e} of R.noEnt)w4.addRow([p.order,p.receptor||p.cliente,p.distrito,telDisp(p.telefono),e.m,e.salida||'',hLocal(e.t),e.motivo,e.obs||'',fechaCorta(e.para)]);
+  zebra(w4);
+  // Pendientes
+  const w5=wb.addWorksheet('Pendientes');
+  head(w5,[['Pedido',20],['Cliente / recibe',26],['Distrito',18],['Dirección',36],['Teléfono',14],['Unid.',7],['Cargado el',12],['Programado para',14],['Estado',18],['Intentos',9],['Último motivo',28]]);
+  for(const p of R.pendientes){const st=D===hoy()?etiquetaEstado(p)[0]:estadoEnDia(p,D)[0];w5.addRow([p.order,p.receptor||p.cliente,p.distrito,[p.direccion,p.complemento].filter(Boolean).join(' · '),telDisp(p.telefono),p.unidades,fechaCorta(p.fechaCarga),fechaCorta(p.fechaPlan),st,p.intentos||0,p.motivo||''])}
+  zebra(w5);
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Despachos_Arena_${D}.xlsx`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);toast('Excel descargado')
+}
+
+/* ---------- actions ---------- */
+async function hacer(fn){if(S.busy)return;S.busy=true;renderSheet();try{await fn()}catch(e){S.busy=false;renderSheet();toast(errMsg(e));return}S.busy=false}
+document.addEventListener('click',async ev=>{
+  const el=ev.target.closest('[data-act]');if(!el)return;
+  const a=el.dataset.act,id=el.dataset.id||(S.sheet&&S.sheet.id)||'',p=id?S.pedidos.get(id):null;
+  if(['fecha','q','pinIn','file','impIni','impFin','impDesp','impCancel','impSel'].includes(a))return;
+  if(a==='scrim'){if(ev.target===el&&!S.busy)closeSheet();return}
+  if(el.tagName==='A')return;
+  ev.preventDefault();
+  switch(a){
+    case 'view':S.view=el.dataset.v;ls.set('arena.view',S.view);render();break;
+    case 'bloquear':S.ofiOk=false;ls.set('arena.ofiOk','0');S.view='moto';ls.set('arena.view','moto');render();break;
+    case 'soy':S.me=el.dataset.m;ls.set('arena.moto',S.me);S.motoTab=enRuta(S.me).length?'ruta':'recoger';render();break;
+    case 'cambiarMoto':S.me='';S.sel.clear();render();break;
+    case 'motoTab':S.motoTab=el.dataset.t;render();window.scrollTo(0,0);break;
+    case 'ofiTab':S.ofiTab=el.dataset.t;render();break;
+    case 'toggle':if(S.readOnly){toast('Solo lectura: pide acceso de Editor');break}S.sel.has(id)?S.sel.delete(id):S.sel.add(id);render();break;
+    case 'selAll':{const rec=porRecoger();if(S.sel.size===rec.length)S.sel.clear();else rec.forEach(p=>S.sel.add(p.id));render();break}
+    case 'salidaAsk':openSheet({k:'salida'});break;
+    case 'salidaGo':await hacer(async()=>{
+      const n=siguienteSalida(S.me),t=nowISO();let k=0;
+      for(const pid of [...S.sel]){const q=S.pedidos.get(pid);if(!q||q.estado!=='pendiente')continue;await actualizar(q,{estado:'en_ruta',motorizado:S.me,salida:n,recogidoAt:t},{t,tipo:'recojo',m:S.me,salida:n});S.sel.delete(pid);k++}
+      closeSheet();S.motoTab='ruta';render();toast(`Salida ${n}: ${k} pedido${k!==1?'s':''} en ruta`);
+    });break;
+    case 'entAsk':openSheet({k:'ent',id});break;
+    case 'entGo':{const s=S.sheet;s.obs=(document.getElementById('f-obs')||{}).value||'';await hacer(async()=>{
+      const t=nowISO();const r=ultimoRecojoAntes(p,t);
+      await actualizar(p,{estado:'entregado',entregadoAt:t,tiempoMin:r?Math.round((Date.parse(t)-Date.parse(r.t))/60000):null},{t,tipo:'entrega',m:S.me||p.motorizado,salida:p.salida,obs:s.obs});
+      closeSheet();render();toast('Entregado a las '+hLocal(t));
+    });break}
+    case 'noEntAsk':openSheet({k:'no',id});break;
+    case 'motivo':S.sheet.motivo=el.dataset.m;S.sheet.obs=(document.getElementById('f-obs')||{}).value||'';S.sheet.para=(document.getElementById('f-para')||{}).value||'';renderSheet();break;
+    case 'noGo':{const s=S.sheet;s.obs=document.getElementById('f-obs').value.trim();s.para=document.getElementById('f-para').value||addDays(hoy(),1);
+      if(s.motivo==='Otro'&&!s.obs){toast('Escribe qué pasó');break}
+      await hacer(async()=>{const t=nowISO();
+        await actualizar(p,{estado:'pendiente',fechaPlan:s.para,motorizado:'',salida:0,intentos:(p.intentos||0)+1,motivo:s.motivo+(s.obs?' · '+s.obs:'')},{t,tipo:'no_entrega',m:S.me||p.motorizado,salida:p.salida,motivo:s.motivo,obs:s.obs,para:s.para});
+        closeSheet();render();toast('Reprogramado para el '+fechaCorta(s.para));});break}
+    case 'devolver':await hacer(async()=>{const t=nowISO();await actualizar(p,{estado:'pendiente',motorizado:'',salida:0},{t,tipo:'devuelto',m:S.me||p.motorizado});closeSheet();render();toast('Devuelto a “Por recoger”')});break;
+    case 'close':if(!S.busy)closeSheet();break;
+    case 'detalle':openSheet({k:'detalle',id});break;
+    case 'delAsk':S.sheet.confirmDel=true;renderSheet();break;
+    case 'delGo':await hacer(async()=>{await S.db.doc('pedidos/'+id).delete();closeSheet();render();toast('Pedido eliminado')});break;
+    case 'reabrir':await hacer(async()=>{const t=nowISO();await actualizar(p,{estado:'pendiente',fechaPlan:hoy(),motorizado:'',salida:0,entregadoAt:''},{t,tipo:'reabrir'});closeSheet();render();toast('Pedido vuelve a “Por recoger”')});break;
+    case 'filtro':S.filtro=el.dataset.f;render();break;
+    case 'rango':S.rango=+el.dataset.r;render();break;
+    case 'excel':descargarExcel();break;
+    case 'importAsk':openSheet({k:'import',step:'pick'});break;
+    case 'impAll':{const s=S.sheet,vis=visiblesImport(s).filter(x=>!x.existe);const all=vis.every(x=>s.sel.has(x.order));vis.forEach(x=>all?s.sel.delete(x.order):s.sel.add(x.order));renderSheet();break}
+    case 'impGo':guardarImport();break;
+    case 'motoDel':{const m=el.dataset.m;await guardarMotos(S.motos.filter(x=>x!==m));break}
+  }
+});
+document.addEventListener('keydown',ev=>{if((ev.key===' '||ev.key==='Enter')&&ev.target.dataset&&ev.target.dataset.act==='toggle'){ev.preventDefault();ev.target.click()}if(ev.key==='Escape'&&S.sheet&&!S.busy)closeSheet()});
+document.addEventListener('input',ev=>{const a=ev.target.dataset&&ev.target.dataset.act;
+  if(a==='pinIn'){const el=ev.target;el.value=el.value.replace(/\D/g,'').slice(-1);const i=+el.dataset.i;if(el.value&&i<3)document.getElementById('pin'+(i+1)).focus();if(el.value&&i===3)el.form.requestSubmit();return}if(a==='q'){S.q=ev.target.value;clearTimeout(S._qt);S._qt=setTimeout(render,180)}});
+document.addEventListener('change',async ev=>{
+  const el=ev.target,a=el.dataset&&el.dataset.act;if(!a)return;const s=S.sheet;
+  if(a==='fecha'){S.fecha=el.value||hoy();render()}
+  else if(a==='file'&&el.files[0])prepararImport(el.files[0]);
+  else if(a==='impIni'){s.ini=el.value;renderSheet()}
+  else if(a==='impFin'){s.fin=el.value;renderSheet()}
+  else if(a==='impDesp'){s.desp=el.value||hoy()}
+  else if(a==='impCancel'){s.omitirCancel=el.checked;renderSheet()}
+  else if(a==='impSel'){el.checked?s.sel.add(el.dataset.o):s.sel.delete(el.dataset.o);renderSheet()}
+});
+document.addEventListener('submit',async ev=>{
+  const f=ev.target;
+  if(f.dataset.form==='pin'){ev.preventDefault();
+    const pin=[0,1,2,3].map(i=>document.getElementById('pin'+i).value).join('');
+    if(!/^\d{4}$/.test(pin)){toast('Escribe los 4 dígitos');return}
+    const h=await sha(pin);
+    if(!S.pinHash){try{await S.db.doc('config/general').set({pinHash:h},{merge:true});S.pinHash=h}catch(e){toast(errMsg(e));return}toast('PIN guardado')}
+    else if(h!==S.pinHash){toast('PIN incorrecto');[0,1,2,3].forEach(i=>document.getElementById('pin'+i).value='');document.getElementById('pin0').focus();return}
+    S.ofiOk=true;ls.set('arena.ofiOk','1');render();return}
+  if(f.dataset.form!=='motoAdd')return;ev.preventDefault();
+  const v=document.getElementById('f-moto').value.trim();if(!v)return;
+  if(S.motos.some(m=>m.toLowerCase()===v.toLowerCase())){toast('Ese nombre ya existe');return}
+  await guardarMotos([...S.motos,v]);
+});
+async function guardarMotos(list){try{await S.db.doc('config/general').set({motorizados:list,actualizado:nowISO()},{merge:true});S.motos=list;render()}catch(e){toast(errMsg(e))}}
+
+/* ---------- boot ---------- */
+render();
+async function boot(){
+  if(!window.firebase||!FIREBASE_CONFIG.apiKey||FIREBASE_CONFIG.apiKey==='PEGAR_AQUI'){
+    S.setupError=!window.firebase?'No se pudo cargar Firebase. Revisa tu conexión a internet.':'Falta pegar la configuración de Firebase en el archivo index.html (bloque FIREBASE_CONFIG).';
+    S.ready=true;render();return}
+  let db;
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db=firebase.firestore();
+    db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
+    const auth=firebase.auth();
+    const u=await new Promise(r=>{const off=auth.onAuthStateChanged(x=>{off();r(x)})});
+    if(!u)await auth.signInAnonymously();
+  }catch(e){
+    S.setupError=(e&&e.code==='auth/operation-not-allowed')?'Activa el inicio de sesión Anónimo en Firebase › Authentication › Método de acceso.':(e&&e.code==='auth/network-request-failed')?'Sin conexión. Abre la app con internet la primera vez.':'Firebase respondió: '+((e&&e.code)||e);
+    S.ready=true;render();return}
+  S.db=db;S.ready=true;render();
+  db.doc('config/general').onSnapshot(snap=>{const d=snap.exists?snap.data():{};S.motos=d.motorizados||[];S.pinHash=d.pinHash||null;S.cfgLoaded=true;render()},e=>{S.cfgLoaded=true;toast(errMsg(e))});
+  const desde=addDays(hoy(),-120);
+  db.collection('pedidos').where('fechaCarga','>=',desde).onSnapshot({includeMetadataChanges:true},snap=>{
+    const m=new Map();for(const d of snap.docs){const x=d.data();m.set(d.id,{...x,id:d.id})}
+    S.pedidos=m;S.online=!snap.metadata.fromCache;render();if(S.sheet&&S.sheet.k==='detalle')renderSheet();
+  },e=>{S.online=false;render();toast(errMsg(e))});
+  window.addEventListener('online',()=>{S.online=true;render()});
+  window.addEventListener('offline',()=>{S.online=false;render()});
+  if(navigator.serviceWorker)navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+boot();
+})();
+</script>
+</body>
+</html>
