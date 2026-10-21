@@ -381,6 +381,8 @@ function estadoEnDia(p,D){
   return['En ruta al cierre','st-en_ruta'];
 }
 function waLink(tel,txt){let d=String(tel||'').replace(/\D/g,'');if(d.length===9)d='51'+d;return d?`https://wa.me/${d}?text=${encodeURIComponent(txt)}`:''}
+function dirTxt(p){return [p.direccion,p.distrito,p.ciudad||'Lima','Perú'].filter(Boolean).join(', ')}
+function wazeLink(p){return 'https://waze.com/ul?q='+encodeURIComponent(dirTxt(p))+'&navigate=yes'}
 function mapsLink(p){const q=[p.direccion,p.distrito,p.ciudad,'Perú'].filter(Boolean).join(', ');return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q)}
 function telDisp(t){return String(t||'').replace(/^\+?51/,'').replace(/(\d{3})(\d{3})(\d{3})/,'$1 $2 $3')}
 
@@ -519,7 +521,7 @@ function cardGrupo(ps){
     <div class="card-head"><div class="grow"><div class="ord">${canalTag(p)} ${ps.length} pedido${ps.length!==1?'s':''} · ${und} und.</div><div class="who">Entrega en ${esc(p.canal)}</div></div>${ps.some(x=>x.fechaLimite)?limitePill([...ps].sort(ordenUrg)[0]):''}</div>
     <div class="addr"><span class="dist">${esc(p.distrito)}</span><br>${esc(p.direccion)}${p.referencia?`<br><span class="muted">Ref: ${esc(p.referencia)}</span>`:''}</div>
     <div class="group-list">${ps.map(x=>`<div class="group-row"><div class="grow"><span class="ord">${esc(x.order)}</span> · ${esc(x.cliente)}<div class="muted" style="font-size:12.5px">${esc(itemsTxt(x))}</div></div><button class="btn ghost sm" data-act="noEntAsk" data-id="${esc(x.id)}" ${S.readOnly?'disabled':''}>No entregado</button></div>`).join('')}</div>
-    <div class="acts2"><a class="btn sm" href="${mapsLink(p)}" target="_blank" rel="noopener">${IC.map}Mapa</a>${tel?`<a class="btn sm" href="tel:${esc(String(tel).replace(/[^\d+]/g,''))}">${IC.phone}Llamar</a>`:'<span></span>'}</div>
+    <div class="acts2"><button class="btn sm" data-act="mapa" data-id="${esc(p.id)}">${IC.map}Mapa</button>${tel?`<a class="btn sm" href="tel:${esc(String(tel).replace(/[^\d+]/g,''))}">${IC.phone}Llamar</a>`:'<span></span>'}</div>
     <button class="btn ok" data-act="entAskG" data-ids="${esc(ids)}" ${S.readOnly?'disabled':''}>${IC.check}${ps.length>1?`Entregué los ${ps.length} en ${esc(p.canal)}`:`Entregué el pedido en ${esc(p.canal)}`}</button>
   </div>`;
 }
@@ -533,7 +535,7 @@ function cardRuta(p){
     ${p.items&&p.items.length?`<div class="items">${esc(itemsTxt(p))}</div>`:''}
     ${tel?`<div class="mono" style="font-size:14px;user-select:all">${esc(telDisp(tel))}</div>`:''}
     <div class="acts">
-      <a class="btn sm" href="${mapsLink(p)}" target="_blank" rel="noopener">${IC.map}Mapa</a>
+      <button class="btn sm" data-act="mapa" data-id="${esc(p.id)}">${IC.map}Mapa</button>
       ${wa?`<a class="btn sm" href="${wa}" target="_blank" rel="noopener">${IC.wa}WhatsApp</a>`:'<span></span>'}
       ${tel?`<a class="btn sm" href="tel:${esc(String(tel).replace(/[^\d+]/g,''))}">${IC.phone}Llamar</a>`:'<span></span>'}
     </div>
@@ -753,6 +755,13 @@ function renderSheet(){
       <button class="btn" data-act="close">Cerrar</button>`;
   }else if(s.k==='import'){h=sheetImport(s)}
   else if(s.k==='aviso'){h=sheetAviso(s)}
+  else if(s.k==='mapa'&&p){h=`<div><div class="eyebrow">${esMkt(p)?esc(p.canal)+' · punto de entrega':esc(p.order)}</div><h2>¿Con qué app quieres ir?</h2></div>
+    <div class="addr"><span class="dist">${esc(p.distrito)}</span><br>${esc(p.direccion)}${p.complemento?' · '+esc(p.complemento):''}${p.referencia?`<br><span class="muted">Ref: ${esc(p.referencia)}</span>`:''}</div>
+    <div class="who-pick">
+      <a href="${mapsLink(p)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;padding:16px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:700;font-size:17px;display:flex;align-items:center;gap:12px"><span class="avatar" style="background:#1A73E8;color:#fff">G</span>Google Maps</a>
+      <a href="${wazeLink(p)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;padding:16px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:700;font-size:17px;display:flex;align-items:center;gap:12px"><span class="avatar" style="background:#33CCFF;color:#06101F">W</span>Waze</a>
+    </div>
+    <button class="btn" data-act="close">Cancelar</button>`}
   else if(s.k==='msg'){h=`<h2>${esc(s.title)}</h2><p style="margin:0">${esc(s.text)}</p><button class="btn" data-act="close">Entendido</button>`}
   host.innerHTML=`<div class="scrim" data-act="scrim"><div class="sheet ${s.k==='import'||s.k==='verfoto'?'wide':''}" role="dialog" aria-modal="true">${h}</div></div>`;
 }
@@ -1077,6 +1086,7 @@ document.addEventListener('click',async ev=>{
   const el=ev.target.closest('[data-act]');if(!el)return;
   const a=el.dataset.act,id=el.dataset.id||(S.sheet&&S.sheet.id)||'',p=id?S.pedidos.get(id):null;
   if(['fecha','q','pinIn','foto','file','impIni','impFin','impDesp','impCancel','impSel'].includes(a))return;
+  if(a==='scrim'&&S.sheet&&S.sheet.k==='mapa'&&ev.target.closest('a')){setTimeout(closeSheet,400);return}
   if(a==='scrim'){if(ev.target===el&&!S.busy&&!(S.sheet&&S.sheet.k==='aviso'))closeSheet();return}
   if(el.tagName==='A')return;
   ev.preventDefault();
@@ -1110,6 +1120,7 @@ document.addEventListener('click',async ev=>{
       closeSheet();render();toast((targets.length>1?targets.length+' pedidos entregados':'Entregado')+' a las '+hLocal(t));
     });break}
     case 'verFoto':verFoto(p);break;
+    case 'mapa':openSheet({k:'mapa',id});break;
     case 'limpiarFotos':limpiarFotos();break;
     case 'noEntAsk':openSheet({k:'no',id});break;
     case 'motivo':S.sheet.motivo=el.dataset.m;S.sheet.obs=(document.getElementById('f-obs')||{}).value||'';S.sheet.para=(document.getElementById('f-para')||{}).value||'';renderSheet();break;
