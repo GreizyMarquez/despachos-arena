@@ -110,6 +110,11 @@ label.fld{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:
 .canal{display:inline-flex;align-items:center;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:6px;padding:2px 7px;border:1px solid var(--line);color:var(--muted);background:var(--surface)}
 .canal.c-Falabella{border-color:#9BBF2A;color:#5C7A00}
 .canal.c-Ripley{border-color:#7B5BA8;color:#5B3D86}
+.canal.c-Recojo{border-color:var(--warn);color:var(--warn)}
+.prio{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:6px;padding:2px 7px;background:var(--bad);color:#fff}
+.card.is-prio{border-color:var(--bad);box-shadow:0 0 0 1px var(--bad) inset}
+.star{border:0;background:none;padding:0 2px;font-size:18px;line-height:1;color:var(--line);cursor:pointer}
+.star.on{color:var(--warn)}
 .group-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .group-row{display:flex;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);font-size:13.5px}
 .group-row:last-child{border-bottom:0}
@@ -288,7 +293,7 @@ const INACT_MIN=60;
 
 /* ---------- data helpers ---------- */
 function etiquetaEstado(p){
-  if(p.estado==='entregado')return['Entregado','st-entregado'];
+  if(p.estado==='entregado')return[esRec(p)?'Recogido':'Entregado','st-entregado'];
   if(p.estado==='en_ruta')return['En ruta','st-en_ruta'];
   if((p.intentos||0)>0)return['Reprogramado','st-reprog'];
   return['Por recoger','st-pendiente'];
@@ -304,7 +309,19 @@ function conDestino(p){
   const pt=S.puntos[p.canal]||{};
   return {...p,receptor:p.canal+' · punto de entrega',direccion:pt.direccion||'Falta la dirección: configúrala en Oficina › Ajustes',complemento:'',distrito:pt.distrito||'San Isidro',ciudad:'Lima',referencia:pt.referencia||'',telefono:pt.telefono||''};
 }
-function ordenUrg(a,b){const x=a.fechaLimite||'9999',y=b.fechaLimite||'9999';return x<y?-1:x>y?1:ordenRuta(a,b)}
+const esRec=p=>p.tipo==='recojo';
+const ahoraHM=()=>hLocal(Date.now());
+function ordenUrg(a,b){
+  if(!!a.prioridad!==!!b.prioridad)return a.prioridad?-1:1;
+  const ha=a.horaHasta||'99:99',hb=b.horaHasta||'99:99';if(ha!==hb)return ha<hb?-1:1;
+  const x=a.fechaLimite||'9999',y=b.fechaLimite||'9999';return x<y?-1:x>y?1:ordenRuta(a,b)}
+function horarioTxt(p){if(!p.horaDesde&&!p.horaHasta)return '';return p.horaDesde&&p.horaHasta?p.horaDesde+'–'+p.horaHasta:p.horaDesde?'Desde '+p.horaDesde:'Hasta '+p.horaHasta}
+function indicaciones(p,conNota=true){
+  const h=horarioTxt(p),activo=p.estado!=='entregado'&&(p.fechaPlan||p.fechaCarga)<=hoy();
+  const tarde=activo&&p.horaHasta&&ahoraHM()>p.horaHasta;
+  const chips=[p.prioridad?'<span class="prio">★ Prioridad</span>':'',h?`<span class="pill ${tarde?'st-noent':'st-reprog'}">${tarde?'Fuera de horario · ':'Entregar '}${esc(h)}</span>`:''].filter(Boolean).join('');
+  return (chips?`<div class="row" style="gap:6px">${chips}</div>`:'')+(conNota&&p.nota?`<div class="note info">Nota de oficina: ${esc(p.nota)}</div>`:'');
+}
 function limiteInfo(p){
   if(!p.fechaLimite)return null;
   const f=fechaCorta(p.fechaLimite).slice(0,5);
@@ -326,7 +343,7 @@ function ultimaActividad(m){
   for(const a of (S.avisos[d]||[]))if(a.m===m&&(!t||a.t>t))t=a.t;
   return t;
 }
-function enRuta(m){return [...S.pedidos.values()].filter(p=>p.estado==='en_ruta'&&(!m||p.motorizado===m)).sort((a,b)=>(a.salida||0)-(b.salida||0)||ordenUrg(a,b))}
+function enRuta(m){return [...S.pedidos.values()].filter(p=>p.estado==='en_ruta'&&(!m||p.motorizado===m)).sort(ordenUrg)}
 function eventosDe(D){const r=[];for(const p of S.pedidos.values())for(const e of p.historial||[])if(dLocal(e.t)===D)r.push({p,e});r.sort((a,b)=>a.e.t<b.e.t?-1:1);return r}
 function ultimoRecojoAntes(p,t){let r=null;for(const e of p.historial||[])if(e.tipo==='recojo'&&e.t<=t)r=e;return r}
 function minutosEntrega(p,e){const r=ultimoRecojoAntes(p,e.t);return r?(Date.parse(e.t)-Date.parse(r.t))/60000:null}
@@ -375,9 +392,9 @@ function estadoEnDia(p,D){
   const evs=(p.historial||[]).filter(e=>dLocal(e.t)===D);
   const last=[...evs].reverse().find(e=>['recojo','entrega','no_entrega'].includes(e.tipo));
   if(D===hoy())return etiquetaEstado(p);
-  if(!last)return p.entregadoAt&&dLocal(p.entregadoAt)<=D?['Entregado','st-entregado']:['Sin salir','st-pendiente'];
-  if(last.tipo==='entrega')return['Entregado','st-entregado'];
-  if(last.tipo==='no_entrega')return['No entregado','st-noent'];
+  if(!last)return p.entregadoAt&&dLocal(p.entregadoAt)<=D?[esRec(p)?'Recogido':'Entregado','st-entregado']:['Sin salir','st-pendiente'];
+  if(last.tipo==='entrega')return[esRec(p)?'Recogido':'Entregado','st-entregado'];
+  if(last.tipo==='no_entrega')return[esRec(p)?'No recogido':'No entregado','st-noent'];
   return['En ruta al cierre','st-en_ruta'];
 }
 function waLink(tel,txt){let d=String(tel||'').replace(/\D/g,'');if(d.length===9)d='51'+d;return d?`https://wa.me/${d}?text=${encodeURIComponent(txt)}`:''}
@@ -469,11 +486,12 @@ function vMoto(){
     renderBar('');
     const all=[...entHoy.map(x=>({...x,k:'e'})),...noHoy.map(x=>({...x,k:'n'}))].sort((a,b)=>a.e.t<b.e.t?1:-1);
     body=all.length?`<div class="list">${all.map(x=>`<div class="card"><div class="card-head"><div class="grow"><div class="ord">${esc(x.p.order)} · Salida ${x.e.salida||'—'}</div><div class="who">${esc(x.p.receptor||x.p.cliente)}</div><div class="addr"><span class="dist">${esc(x.p.distrito)}</span></div></div>
-      ${x.k==='e'?`<span class="pill st-entregado">${hLocal(x.e.t)}</span>`:`<span class="pill st-noent">No entregado ${hLocal(x.e.t)}</span>`}</div>
+      ${x.k==='e'?`<span class="pill st-entregado">${esRec(x.p)?'Recogido ':''}${hLocal(x.e.t)}</span>`:`<span class="pill st-noent">${esRec(x.p)?'No recogido':'No entregado'} ${hLocal(x.e.t)}</span>`}</div>
       ${x.k==='n'?`<div class="note bad">${esc(x.e.motivo)}${x.e.para?' · Reprogramado para el '+fechaCorta(x.e.para):''}</div>`:`<div class="meta"><span>Tiempo <b>${durTxt(minutosEntrega(x.p,x.e))}</b></span><span>${x.p.foto?'Con foto':'Sin foto'}</span>${x.e.obs?`<span>${esc(x.e.obs)}</span>`:''}</div>`}</div>`).join('')}</div>`
       :`<div class="empty"><h3>Aún no hay entregas hoy</h3><p>Lo que entregues aparecerá aquí con la hora.</p></div>`;
   }
   return `<div class="row spread"><div><div class="eyebrow">${esc(fechaLarga(d))}</div><h1>Hola, ${esc(S.me.split(' ')[0])}</h1></div><button class="btn ghost sm" data-act="cambiarMoto">Cambiar</button></div>
+  ${(()=>{const np=[...rec,...mios].filter(p=>p.prioridad).length;return np?`<div class="note bad"><b>★ ${np} pedido${np!==1?'s':''} con prioridad.</b> Llévalo${np!==1?'s':''} y entrégalo${np!==1?'s':''} primero.</div>`:''})()}
   ${mios.some(p=>p.fechaLimite&&p.fechaLimite<=d)?`<div class="note bad">Tienes ${mios.filter(p=>p.fechaLimite&&p.fechaLimite<=d).length} pedido(s) en ruta que vencen hoy o ya vencieron. Entrégalos primero.</div>`:''}
   ${S.readOnly?'<div class="note bad">Solo puedes ver los pedidos. Para marcar recojos y entregas, la oficina debe invitarte por correo como Editor.</div>':''}
   <div class="tabs" role="tablist">
@@ -507,39 +525,41 @@ function vMisHoras(){
 function itemsTxt(p){return (p.items||[]).map(i=>(i.q>1?i.q+'× ':'')+i.n).join(' · ')}
 function cardRecoger(p){
   const sel=S.sel.has(p.id);
-  return `<div class="card ${sel?'sel':''}" data-act="toggle" data-id="${esc(p.id)}" role="checkbox" aria-checked="${sel}" tabindex="0">
+  return `<div class="card ${sel?'sel':''} ${p.prioridad?'is-prio':''}" data-act="toggle" data-id="${esc(p.id)}" role="checkbox" aria-checked="${sel}" tabindex="0">
     <div class="card-head"><span class="check">${IC.check}</span>
-      <div class="grow"><div class="ord">${canalTag(p)} ${esc(p.order)} · ${p.unidades||0} und.</div><div class="who">${esc(esMkt(p)?'Entregar en '+p.canal:(p.receptor||p.cliente))}</div>${esMkt(p)?`<div class="muted" style="font-size:13px">Cliente: ${esc(p.cliente)}</div>`:''}
-      <div class="addr"><span class="dist">${esc(p.distrito)}</span> · ${esc(p.direccion)}</div></div></div>
+      <div class="grow"><div class="ord">${canalTag(p)} ${esc(p.order)}${esRec(p)?'':' · '+(p.unidades||0)+' und.'}</div><div class="who">${esc(esMkt(p)?'Entregar en '+p.canal:esRec(p)?'Recoger donde '+p.cliente:(p.receptor||p.cliente))}</div>${esMkt(p)?`<div class="muted" style="font-size:13px">Cliente: ${esc(p.cliente)}</div>`:''}
+      <div class="addr"><span class="dist">${esc(p.distrito)}</span> · ${esc(p.direccion)}</div>${esRec(p)&&p.items&&p.items.length?`<div class="items">Recoger: ${esc(itemsTxt(p))}</div>`:''}</div></div>
+    ${indicaciones(p)}
     ${(p.fechaLimite||(p.intentos||0)>0)?`<div class="row" style="gap:6px">${limitePill(p)}${(p.intentos||0)>0?pill(p):''}</div>`:''}
     ${(p.intentos||0)>0&&p.motivo?`<div class="note">Intento anterior: ${esc(p.motivo)}</div>`:''}
   </div>`;
 }
 function cardGrupo(ps){
   const p=ps[0],ids=ps.map(x=>x.id).join(','),tel=p.telefono,und=ps.reduce((a,x)=>a+(x.unidades||0),0);
-  return `<div class="card" style="border-width:2px">
+  return `<div class="card ${ps.some(x=>x.prioridad)?'is-prio':''}" style="border-width:2px">
     <div class="card-head"><div class="grow"><div class="ord">${canalTag(p)} ${ps.length} pedido${ps.length!==1?'s':''} · ${und} und.</div><div class="who">Entrega en ${esc(p.canal)}</div></div>${ps.some(x=>x.fechaLimite)?limitePill([...ps].sort(ordenUrg)[0]):''}</div>
     <div class="addr"><span class="dist">${esc(p.distrito)}</span><br>${esc(p.direccion)}${p.referencia?`<br><span class="muted">Ref: ${esc(p.referencia)}</span>`:''}</div>
-    <div class="group-list">${ps.map(x=>`<div class="group-row"><div class="grow"><span class="ord">${esc(x.order)}</span> · ${esc(x.cliente)}<div class="muted" style="font-size:12.5px">${esc(itemsTxt(x))}</div></div><button class="btn ghost sm" data-act="noEntAsk" data-id="${esc(x.id)}" ${S.readOnly?'disabled':''}>No entregado</button></div>`).join('')}</div>
+    <div class="group-list">${ps.map(x=>`<div class="group-row"><div class="grow">${x.prioridad?'<span class="prio">★</span> ':''}<span class="ord">${esc(x.order)}</span> · ${esc(x.cliente)}<div class="muted" style="font-size:12.5px">${esc(itemsTxt(x))}</div>${x.nota?`<div style="font-size:12.5px;color:var(--accent)">Nota: ${esc(x.nota)}</div>`:''}</div><button class="btn ghost sm" data-act="noEntAsk" data-id="${esc(x.id)}" ${S.readOnly?'disabled':''}>No entregado</button></div>`).join('')}</div>
     <div class="acts2"><button class="btn sm" data-act="mapa" data-id="${esc(p.id)}">${IC.map}Mapa</button>${tel?`<a class="btn sm" href="tel:${esc(String(tel).replace(/[^\d+]/g,''))}">${IC.phone}Llamar</a>`:'<span></span>'}</div>
     <button class="btn ok" data-act="entAskG" data-ids="${esc(ids)}" ${S.readOnly?'disabled':''}>${IC.check}${ps.length>1?`Entregué los ${ps.length} en ${esc(p.canal)}`:`Entregué el pedido en ${esc(p.canal)}`}</button>
   </div>`;
 }
 function cardRuta(p){
   const tel=p.telefono,nombre=(p.receptor||p.cliente||'').split(' ')[0];
-  const wa=waLink(tel,`Hola ${nombre}, le saluda el motorizado de Arena Perú. Estoy en camino con su pedido ${p.order}.`);
-  return `<div class="card">
-    <div class="card-head"><div class="grow"><div class="ord">${esc(p.order)} · Salida ${p.salida||'—'} · recogido ${hLocal(p.recogidoAt)}</div>
-      <div class="who">${esc(p.receptor||p.cliente)}</div>${p.receptor&&p.cliente&&p.receptor!==p.cliente?`<div class="muted" style="font-size:13px">Cliente: ${esc(p.cliente)}</div>`:''}</div>${limitePill(p)}</div>
+  const wa=waLink(tel,esRec(p)?`Hola ${nombre}, le saluda el motorizado de Arena Perú. Estoy en camino para recoger su paquete.`:`Hola ${nombre}, le saluda el motorizado de Arena Perú. Estoy en camino con su pedido ${p.order}.`);
+  return `<div class="card ${p.prioridad?'is-prio':''}">
+    <div class="card-head"><div class="grow"><div class="ord">${canalTag(p)} ${esc(p.order)} · Salida ${p.salida||'—'} · recogido ${hLocal(p.recogidoAt)}</div>
+      <div class="who">${esRec(p)?'Recoger donde ':''}${esc(p.receptor||p.cliente)}</div>${p.receptor&&p.cliente&&p.receptor!==p.cliente?`<div class="muted" style="font-size:13px">Cliente: ${esc(p.cliente)}</div>`:''}</div>${limitePill(p)}</div>
     <div class="addr"><span class="dist">${esc(p.distrito)}</span>${p.ciudad&&p.ciudad.toLowerCase()!=='lima'?' · '+esc(p.ciudad):''}<br>${esc(p.direccion)}${p.complemento?' · '+esc(p.complemento):''}${p.referencia?`<br><span class="muted">Ref: ${esc(p.referencia)}</span>`:''}</div>
-    ${p.items&&p.items.length?`<div class="items">${esc(itemsTxt(p))}</div>`:''}
+    ${p.items&&p.items.length?`<div class="items">${esRec(p)?'Recoger: ':''}${esc(itemsTxt(p))}</div>`:''}
+    ${indicaciones(p)}
     ${tel?`<div class="mono" style="font-size:14px;user-select:all">${esc(telDisp(tel))}</div>`:''}
     <div class="acts">
       <button class="btn sm" data-act="mapa" data-id="${esc(p.id)}">${IC.map}Mapa</button>
       ${wa?`<a class="btn sm" href="${wa}" target="_blank" rel="noopener">${IC.wa}WhatsApp</a>`:'<span></span>'}
       ${tel?`<a class="btn sm" href="tel:${esc(String(tel).replace(/[^\d+]/g,''))}">${IC.phone}Llamar</a>`:'<span></span>'}
     </div>
-    <div class="acts2"><button class="btn bad" data-act="noEntAsk" data-id="${esc(p.id)}" ${S.readOnly?'disabled':''}>No entregado</button><button class="btn ok" data-act="entAsk" data-id="${esc(p.id)}" ${S.readOnly?'disabled':''}>${IC.check}Entregado</button></div>
+    <div class="acts2"><button class="btn bad" data-act="noEntAsk" data-id="${esc(p.id)}" ${S.readOnly?'disabled':''}>${esRec(p)?'No se pudo recoger':'No entregado'}</button><button class="btn ok" data-act="entAsk" data-id="${esc(p.id)}" ${S.readOnly?'disabled':''}>${IC.check}${esRec(p)?'Recogido':'Entregado'}</button></div>
   </div>`;
 }
 
@@ -548,7 +568,7 @@ function vOfi(){
   renderBar('');
   const t=S.ofiTab;
   const head=`<div class="row spread"><div><div class="eyebrow">Arena Perú · Ecommerce</div><h1>Control de despachos</h1></div>
-    <div class="row"><button class="btn ghost sm" data-act="bloquear">Bloquear</button><button class="btn primary" data-act="importAsk" ${S.readOnly?'disabled':''}>${IC.up}Cargar Excel</button></div></div>
+    <div class="row"><button class="btn ghost sm" data-act="bloquear">Bloquear</button><button class="btn" data-act="recojoAsk">${IC.truck}Nuevo recojo</button><button class="btn primary" data-act="importAsk" ${S.readOnly?'disabled':''}>${IC.up}Cargar Excel</button></div></div>
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected="${t==='dia'}" data-act="ofiTab" data-t="dia">Día</button>
       <button role="tab" aria-selected="${t==='horas'}" data-act="ofiTab" data-t="horas">Horas</button>
@@ -618,13 +638,14 @@ function tablaDia(lista,D){
     const foto=(ent&&p.foto?`<button class="btn sm" data-act="verFoto" data-id="${esc(p.id)}">${IC.cam}Foto</button>`:'')+(ent&&ent.obs?`<span class="muted" style="font-size:12.5px;display:block;margin-top:4px">${esc(ent.obs)}</span>`:'');
     return {p,t,c,rec,ent,no,min,foto};
   });
-  const cards=`<div class="list only-sm">${rows.map(r=>`<div class="card"><div class="card-head"><div class="grow"><div class="ord">${canalTag(r.p)} ${esc(r.p.order)}</div><div class="who">${esc(r.p.receptor||r.p.cliente)}</div><div class="addr"><span class="dist">${esc(r.p.distrito)}</span> · ${esc(r.p.direccion)}</div></div><span class="pill ${r.c}">${r.t}</span></div>
+  const cards=`<div class="list only-sm">${rows.map(r=>`<div class="card ${r.p.prioridad&&r.p.estado!=='entregado'?'is-prio':''}"><div class="card-head"><div class="grow"><div class="ord"><button class="star ${r.p.prioridad?'on':''}" data-act="prio" data-id="${esc(r.p.id)}" aria-label="Prioridad">★</button>${canalTag(r.p)} ${esc(r.p.order)}</div><div class="who">${esc(r.p.receptor||r.p.cliente)}</div><div class="addr"><span class="dist">${esc(r.p.distrito)}</span> · ${esc(r.p.direccion)}</div></div><span class="pill ${r.c}">${r.t}</span></div>
+    ${indicaciones(r.p)}
     ${r.p.fechaLimite?`<div class="row" style="gap:6px"><span class="muted" style="font-size:12.5px">Límite VTEX ${fechaCorta(r.p.fechaLimite)}</span>${limitePill(r.p)}</div>`:''}
     <div class="meta">${r.rec?`<span>${esc(r.rec.m)} · S${r.rec.salida||1}</span><span>Recojo <b>${hLocal(r.rec.t)}</b></span>`:''}${r.ent?`<span>Entrega <b>${hLocal(r.ent.t)}</b></span><span>Tiempo <b>${durTxt(r.min)}</b></span>`:''}</div>
     ${r.no?`<div class="note bad">${esc(r.no.motivo)}${r.no.obs?' · '+esc(r.no.obs):''}${r.no.para?' · para el '+fechaCorta(r.no.para):''}</div>`:''}
     <div class="row">${r.foto}<div class="grow"></div><button class="btn ghost sm" data-act="detalle" data-id="${esc(r.p.id)}">Detalle</button></div></div>`).join('')}</div>`;
   const table=`<div class="tbl-wrap only-lg"><table><thead><tr><th>Pedido</th><th>Cliente / destino</th><th>Estado</th><th>Motorizado</th><th>Recojo</th><th>Entrega</th><th>Tiempo</th><th>Límite VTEX</th><th>Foto / obs.</th><th></th></tr></thead><tbody>
-    ${rows.map(r=>`<tr><td class="t">${esc(r.p.order)}${r.p.canal&&r.p.canal!=='VTEX'?'<br>'+canalTag(r.p):''}</td><td><b>${esc(r.p.receptor||r.p.cliente)}</b><br><span class="muted">${esc(r.p.distrito)} · ${esc(r.p.direccion)}</span>${r.no?`<br><span style="color:var(--bad);font-size:12.5px">${esc(r.no.motivo)}${r.no.para?' · para el '+fechaCorta(r.no.para):''}</span>`:''}</td>
+    ${rows.map(r=>`<tr><td class="t"><button class="star ${r.p.prioridad?'on':''}" data-act="prio" data-id="${esc(r.p.id)}" title="${r.p.prioridad?'Quitar prioridad':'Marcar como prioridad'}" aria-label="Prioridad">★</button>${esc(r.p.order)}${r.p.canal&&r.p.canal!=='VTEX'?'<br>'+canalTag(r.p):''}${horarioTxt(r.p)?`<br><span class="muted">${esc(horarioTxt(r.p))}</span>`:''}</td><td><b>${esc(r.p.receptor||r.p.cliente)}</b><br><span class="muted">${esc(r.p.distrito)} · ${esc(r.p.direccion)}</span>${r.no?`<br><span style="color:var(--bad);font-size:12.5px">${esc(r.no.motivo)}${r.no.para?' · para el '+fechaCorta(r.no.para):''}</span>`:''}</td>
     <td><span class="pill ${r.c}">${r.t}</span></td><td>${r.rec?esc(r.rec.m)+'<br><span class="muted">Salida '+(r.rec.salida||1)+'</span>':'<span class="muted">—</span>'}</td>
     <td class="t">${r.rec?hLocal(r.rec.t):''}</td><td class="t">${r.ent?hLocal(r.ent.t):''}</td><td class="t">${r.ent?durTxt(r.min):''}</td><td>${r.p.fechaLimite?`<span class="t">${fechaCorta(r.p.fechaLimite).slice(0,5)}</span><br>${limitePill(r.p)}`:'<span class="muted">—</span>'}</td><td>${r.foto}</td>
     <td><button class="btn ghost sm" data-act="detalle" data-id="${esc(r.p.id)}">Detalle</button></td></tr>`).join('')}</tbody></table></div>`;
@@ -721,40 +742,58 @@ function renderSheet(){
       <p class="muted" style="margin:0;font-size:13px">Se guardará la hora de recojo. Los demás quedan en “Por recoger”.</p>
       <div class="acts2"><button class="btn" data-act="close">Volver</button><button class="btn primary" data-act="salidaGo" ${S.busy?'disabled':''}>${S.busy?'Guardando…':'Sí, me los llevo'}</button></div>`;
   }else if(s.k==='ent'&&p){
-    h=`<div><div class="eyebrow">${s.ids?esc(p.canal)+' · '+nG+' pedido'+(nG!==1?'s':''):esc(p.order)+' · '+esc(p.distrito)}</div><h2>${s.ids?'Entrega en '+esc(p.canal):'Entrega a '+esc(p.receptor||p.cliente)}</h2></div>
+    h=`<div><div class="eyebrow">${s.ids?esc(p.canal)+' · '+nG+' pedido'+(nG!==1?'s':''):esc(p.order)+' · '+esc(p.distrito)}</div><h2>${s.ids?'Entrega en '+esc(p.canal):esRec(p)?'Recojo donde '+esc(p.cliente):'Entrega a '+esc(p.receptor||p.cliente)}</h2></div>
       ${s.ids?`<p class="muted" style="margin:0;font-size:13.5px">Se marcan como entregados a la misma hora: ${s.ids.map(i=>esc((S.pedidos.get(i)||{}).order||i)).join(', ')}. Una sola foto para todos.</p>`:''}
-      <div class="photo-drop" style="min-height:${s.preview?'0':'140px'}">${s.preview?`<img src="${s.preview}" alt="Foto de entrega">`:`<div>${IC.cam.replace('<svg','<svg style="width:36px;height:36px"')}<div style="font-weight:700;color:var(--ink);margin-top:6px">${s.leyendo?'Procesando foto…':'Foto de la entrega'}</div><div style="font-size:13px">Paquete con el cliente o en la puerta</div></div>`}</div>
+      <div class="photo-drop" style="min-height:${s.preview?'0':'140px'}">${s.preview?`<img src="${s.preview}" alt="Foto de entrega">`:`<div>${IC.cam.replace('<svg','<svg style="width:36px;height:36px"')}<div style="font-weight:700;color:var(--ink);margin-top:6px">${s.leyendo?'Procesando foto…':(esRec(p)?'Foto del paquete recogido':'Foto de la entrega')}</div><div style="font-size:13px">${esRec(p)?'El paquete que te entregó el cliente':'Paquete con el cliente o en la puerta'}</div></div>`}</div>
       <div class="acts2">
         <label class="btn" style="position:relative;overflow:hidden">${IC.cam}${s.preview?'Otra foto':'Tomar foto'}<input id="f-foto" type="file" accept="image/*" capture="environment" data-act="foto" aria-label="Tomar foto con la cámara" style="position:absolute;inset:0;opacity:0"></label>
         <label class="btn" style="position:relative;overflow:hidden">${IC.up}Desde galería<input id="f-foto2" type="file" accept="image/*" data-act="foto" aria-label="Elegir foto de la galería" style="position:absolute;inset:0;opacity:0"></label>
       </div>
-      <label class="fld"><span>¿Quién recibió? (opcional)</span><textarea id="f-obs" class="input" placeholder="Ej.: recibió el portero">${esc(s.obs||'')}</textarea></label>
-      <div class="acts2"><button class="btn" data-act="close">Cancelar</button><button class="btn ok" data-act="entGo" ${!s.foto||S.busy?'disabled':''}>${S.busy?'Guardando…':'Confirmar entrega'}</button></div>
+      <label class="fld"><span>${esRec(p)?'¿Quién entregó el paquete? (opcional)':'¿Quién recibió? (opcional)'}</span><textarea id="f-obs" class="input" placeholder="${esRec(p)?'Ej.: lo entregó la señora Ana':'Ej.: recibió el portero'}">${esc(s.obs||'')}</textarea></label>
+      <div class="acts2"><button class="btn" data-act="close">Cancelar</button><button class="btn ok" data-act="entGo" ${!s.foto||S.busy?'disabled':''}>${S.busy?'Guardando…':(esRec(p)&&!s.ids?'Confirmar recojo':'Confirmar entrega')}</button></div>
       <p class="muted" style="margin:0;font-size:12.5px;text-align:center">La foto es obligatoria. La hora se guarda al confirmar. Si no hay señal, la foto se sube sola cuando vuelva.</p>`;
   }else if(s.k==='verfoto'){
     h=`<div class="row spread"><div><div class="eyebrow">${esc(s.order||'')}</div><h2>Foto de entrega</h2></div><button class="btn ghost sm" data-act="close">Cerrar</button></div>
       ${s.src?`<img class="full-img" src="${s.src}" alt="Foto de entrega">${s.info?`<p class="muted" style="margin:0;font-size:13px;text-align:center">${esc(s.info)}</p>`:''}`:`<p class="muted">${s.err?esc(s.err):'Cargando foto…'}</p>`}`;
   }else if(s.k==='no'&&p){
     const man=addDays(hoy(),1);
-    h=`<div><div class="eyebrow">${esc(p.order)}</div><h2>No se entregó a ${esc(p.receptor||p.cliente)}</h2></div>
+    h=`<div><div class="eyebrow">${esc(p.order)}</div><h2>${esRec(p)?'No se pudo recoger donde':'No se entregó a'} ${esc(p.receptor||p.cliente)}</h2></div>
       <div><div class="eyebrow" style="margin-bottom:8px">¿Qué pasó?</div><div class="chips">${MOTIVOS.map(m=>`<button class="chip" aria-pressed="${s.motivo===m}" data-act="motivo" data-m="${esc(m)}">${esc(m)}</button>`).join('')}</div></div>
       <label class="fld"><span>Detalle ${s.motivo==='Otro'?'(obligatorio)':'(opcional)'}</span><textarea id="f-obs" class="input" placeholder="Ej.: toqué 3 veces, nadie respondió">${esc(s.obs||'')}</textarea></label>
-      <label class="fld"><span>Reprogramar entrega para</span><input id="f-para" class="input" type="date" min="${hoy()}" value="${s.para||man}"></label>
+      <label class="fld"><span>${esRec(p)?'Reprogramar recojo para':'Reprogramar entrega para'}</span><input id="f-para" class="input" type="date" min="${hoy()}" value="${s.para||man}"></label>
       <div class="acts2"><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="noGo" ${!s.motivo||S.busy?'disabled':''}>${S.busy?'Guardando…':'Reprogramar'}</button></div>
       <button class="btn ghost sm" data-act="devolver" data-id="${esc(p.id)}">Lo llevé por error: devolver a “Por recoger” sin registrar intento</button>`;
   }else if(s.k==='detalle'&&p){
-    const tipos={carga:'Cargado',recojo:'Recogido',entrega:'Entregado',no_entrega:'No entregado',devuelto:'Devuelto a almacén',reabrir:'Reabierto'};
+    const tipos={carga:esRec(p)?'Recojo creado':'Cargado',recojo:esRec(p)?'Salió a recoger':'Recogido',entrega:esRec(p)?'Recogido donde cliente':'Entregado',no_entrega:esRec(p)?'No se pudo recoger':'No entregado',devuelto:'Devuelto a almacén',reabrir:'Reabierto'};
     h=`<div class="row spread"><div><div class="eyebrow">${canalTag(p)} ${esc(p.order)}</div><h2>${esc(esMkt(p)?p.cliente:(p.receptor||p.cliente))}</h2>${esMkt(p)?`<div class="muted" style="font-size:13px">Se entrega en el punto de ${esc(p.canal)}${p.distritoCliente?' · cliente en '+esc(p.distritoCliente):''}</div>`:''}</div>${pill(p)}</div>
       <div class="addr"><span class="dist">${esc(p.distrito)}</span> · ${esc(p.ciudad)}<br>${esc(p.direccion)}${p.complemento?' · '+esc(p.complemento):''}${p.referencia?'<br>Ref: '+esc(p.referencia):''}</div>
       <div class="meta"><span>Tel. <b class="mono">${esc(telDisp(p.telefono))||'—'}</b></span><span>${p.unidades||0} und.</span>${p.total?`<span>S/ <b>${Number(p.total).toFixed(2)}</b></span>`:''}<span>Cargado <b>${fechaCorta(p.fechaCarga)}</b></span>${p.fechaLimite?`<span>Límite VTEX <b>${fechaCorta(p.fechaLimite)}</b></span>`:''}${p.fechaPlan&&p.fechaPlan!==p.fechaCarga?`<span>Programado <b>${fechaCorta(p.fechaPlan)}</b></span>`:''}</div>
       ${p.items&&p.items.length?`<div class="items">${esc(itemsTxt(p))}</div>`:''}
       <div><div class="eyebrow" style="margin-bottom:6px">Historial</div><div class="imp-list" style="max-height:220px">${(p.historial||[]).map(e=>`<div class="imp-row" style="grid-template-columns:auto 1fr"><span class="mono" style="font-size:12px">${fechaCorta(dLocal(e.t)).slice(0,5)} ${hLocal(e.t)}</span><span><b>${tipos[e.tipo]||e.tipo}</b>${e.m?' · '+esc(e.m):''}${e.salida?' · salida '+e.salida:''}${e.motivo?' · '+esc(e.motivo):''}${e.obs?' · '+esc(e.obs):''}${e.para?' · para el '+fechaCorta(e.para):''}</span></div>`).join('')}</div></div>
-      ${p.foto?`<button class="btn" data-act="verFoto" data-id="${esc(p.id)}">${IC.cam}Ver foto de entrega</button>`:''}
+      ${p.estado!=='entregado'?`<form class="list" data-form="indic" style="border:1px solid var(--line);border-radius:10px;padding:12px;gap:10px">
+        <div class="eyebrow">Indicaciones para el motorizado</div>
+        <label class="row" style="font-weight:650"><input id="in-prio" type="checkbox" ${p.prioridad?'checked':''} style="width:20px;height:20px"> ★ Entrega con prioridad</label>
+        <div class="row"><label class="fld grow"><span>Entregar desde</span><input id="in-desde" class="input" type="time" value="${esc(p.horaDesde||'')}"></label><label class="fld grow"><span>hasta</span><input id="in-hasta" class="input" type="time" value="${esc(p.horaHasta||'')}"></label></div>
+        <label class="fld"><span>Nota (opcional)</span><input id="in-nota" class="input" maxlength="160" value="${esc(p.nota||'')}" placeholder="Ej.: llamar antes de llegar"></label>
+        <button class="btn primary" type="submit">Guardar indicaciones</button></form>`:''}
+      ${p.foto?`<button class="btn" data-act="verFoto" data-id="${esc(p.id)}">${IC.cam}Ver foto de ${esRec(p)?'recojo':'entrega'}</button>`:''}
       ${s.confirmDel?`<div class="note bad">¿Eliminar el pedido ${esc(p.order)} de la app? No se puede deshacer.</div><div class="acts2"><button class="btn" data-act="detalle" data-id="${esc(p.id)}">No</button><button class="btn bad" data-act="delGo" data-id="${esc(p.id)}">Sí, eliminar</button></div>`
       :`<div class="acts2">${p.estado!=='pendiente'?`<button class="btn" data-act="reabrir" data-id="${esc(p.id)}" ${S.readOnly?'disabled':''}>Volver a “Por recoger”</button>`:'<span></span>'}<button class="btn bad" data-act="delAsk" data-id="${esc(p.id)}" ${S.readOnly?'disabled':''}>Eliminar pedido</button></div>`}
       <button class="btn" data-act="close">Cerrar</button>`;
   }else if(s.k==='import'){h=sheetImport(s)}
   else if(s.k==='aviso'){h=sheetAviso(s)}
+  else if(s.k==='recojo'){h=`<div><div class="eyebrow">Recojo donde cliente</div><h2>Nuevo recojo</h2></div>
+    <form class="list" data-form="recojo" style="gap:10px">
+      <div class="row"><label class="fld grow"><span>Nombre del cliente</span><input id="rc-cli" class="input" required maxlength="80"></label><label class="fld grow"><span>Teléfono</span><input id="rc-tel" class="input" inputmode="tel" maxlength="20"></label></div>
+      <label class="fld"><span>Dirección</span><input id="rc-dir" class="input" required maxlength="160" placeholder="Calle, número, dpto."></label>
+      <div class="row"><label class="fld grow"><span>Distrito</span><input id="rc-dis" class="input" required maxlength="60"></label><label class="fld grow"><span>Referencia</span><input id="rc-ref" class="input" maxlength="120"></label></div>
+      <label class="fld"><span>¿Qué debe recoger?</span><input id="rc-que" class="input" required maxlength="160" placeholder="Ej.: cambio de talla, 1 lentes de natación"></label>
+      <div class="row"><label class="fld grow"><span>Pedido relacionado (opcional)</span><input id="rc-ped" class="input" maxlength="40" placeholder="Ej.: 1621630576894-01"></label><label class="fld grow"><span>Fecha</span><input id="rc-fec" class="input" type="date" min="${hoy()}" value="${hoy()}"></label></div>
+      <div class="row"><label class="fld grow"><span>Recoger desde</span><input id="rc-desde" class="input" type="time"></label><label class="fld grow"><span>hasta</span><input id="rc-hasta" class="input" type="time"></label></div>
+      <label class="fld"><span>Nota para el motorizado (opcional)</span><input id="rc-nota" class="input" maxlength="160"></label>
+      <label class="row" style="font-weight:650"><input id="rc-prio" type="checkbox" style="width:20px;height:20px"> ★ Con prioridad</label>
+      <div class="acts2"><button class="btn" type="button" data-act="close">Cancelar</button><button class="btn primary" type="submit">Crear recojo</button></div>
+    </form>`}
   else if(s.k==='mapa'&&p){h=`<div><div class="eyebrow">${esMkt(p)?esc(p.canal)+' · punto de entrega':esc(p.order)}</div><h2>¿Con qué app quieres ir?</h2></div>
     <div class="addr"><span class="dist">${esc(p.distrito)}</span><br>${esc(p.direccion)}${p.complemento?' · '+esc(p.complemento):''}${p.referencia?`<br><span class="muted">Ref: ${esc(p.referencia)}</span>`:''}</div>
     <div class="who-pick">
@@ -776,6 +815,7 @@ const ALIAS={
   order:['order','pedido','nropedido','npedido','numeropedido','nrodepedido','numerodepedido','orden','idpedido','orderid','ordenid','codigopedido'],
   nombre:['clientname','nombre','nombres','cliente','nombrecliente','nombredelcliente','nombreapellido','nombreyapellido','nombresyapellidos','nombreyapellidos'],
   canal:['metododepago','canal','marketplace','tienda','origendeventa','canaldeventa'],
+  prio:['prioridad','urgente','prioritario'],
   desc:['descripcion','descripciondelproducto','nombredelproducto'],
   apellido:['clientlastname','apellido','apellidos'],
   telefono:['phone','telefono','celular','movil','tel','telefonocliente','whatsapp'],
@@ -831,7 +871,7 @@ async function leerArchivo(file){
       const f=aFecha(v('fecha')),lim=aFecha(v('limite'));
       const dir=[v('street'),v('number')].filter(Boolean).join(' ');
       x={order:o,cliente:[v('nombre'),v('apellido')].filter(Boolean).join(' '),receptor:v('receptor'),telefono:v('telefono'),direccion:dir,complemento:v('complemento'),referencia:v('referencia'),
-         distrito:v('distrito'),ciudad:v('ciudad'),depto:v('depto'),estadoOrigen:v('estado'),courier:v('courier'),fechaPedido:f,fechaLimite:lim,canal,items:[],unidades:0,total:0};
+         distrito:v('distrito'),ciudad:v('ciudad'),depto:v('depto'),estadoOrigen:v('estado'),courier:v('courier'),fechaPedido:f,fechaLimite:lim,canal,prioridad:/^(si|sí|x|1|alta|urgente|true)$/i.test(v('prio')),items:[],unidades:0,total:0};
       g.set(key,x);
     }
     const d0=v('desc'),q=parseInt(v('qty'))||1,n=(d0&&!/^#/.test(d0))?d0:v('sku');
@@ -887,7 +927,7 @@ async function guardarImport(){
         const t=nowISO();
         await ref.set({id,order:x.order,canal:x.canal||'VTEX',cliente:x.cliente,receptor:mk?'':x.receptor,telefono:mk?'':x.telefono,telefonoCliente:x.telefono,direccion:mk?'':x.direccion,complemento:mk?'':x.complemento,referencia:mk?'':x.referencia,distrito:mk?'':x.distrito,ciudad:mk?'':x.ciudad,distritoCliente:x.distrito,ciudadCliente:x.ciudad,depto:x.depto,
           items:x.items.slice(0,30),unidades:x.unidades,total:x.total,fechaPedido:x.fechaPedido,fechaLimite:x.fechaLimite||'',courier:x.courier,
-          fechaCarga:s.desp,fechaPlan:s.desp,estado:'pendiente',intentos:0,motorizado:'',salida:0,recogidoAt:'',entregadoAt:'',motivo:'',
+          fechaCarga:s.desp,fechaPlan:s.desp,prioridad:!!x.prioridad,estado:'pendiente',intentos:0,motorizado:'',salida:0,recogidoAt:'',entregadoAt:'',motivo:'',
           historial:[{t,tipo:'carga'}],cargadoAt:t,actualizado:t});
         ok++;
       }
@@ -958,8 +998,8 @@ async function descargarExcel(){
   zebra(w4);
   // Pendientes
   const w5=wb.addWorksheet('Pendientes');
-  head(w5,[['Canal',11],['Pedido',20],['Cliente / recibe',26],['Distrito',18],['Dirección',36],['Teléfono',14],['Unid.',7],['Cargado el',12],['Programado para',14],['Fecha límite VTEX',13],['Estado',18],['Intentos',9],['Último motivo',28]]);
-  for(const p of R.pendientes){const st=D===hoy()?etiquetaEstado(p)[0]:estadoEnDia(p,D)[0];w5.addRow([p.canal||'VTEX',p.order,p.receptor||p.cliente,p.distrito,[p.direccion,p.complemento].filter(Boolean).join(' · '),telDisp(p.telefono),p.unidades,fechaCorta(p.fechaCarga),fechaCorta(p.fechaPlan),fechaCorta(p.fechaLimite),(p.fechaLimite&&p.fechaLimite<D?'Vencido · ':'')+st,p.intentos||0,p.motivo||''])}
+  head(w5,[['Canal',11],['Pedido',20],['Cliente / recibe',26],['Distrito',18],['Dirección',36],['Teléfono',14],['Unid.',7],['Cargado el',12],['Programado para',14],['Fecha límite VTEX',13],['Estado',18],['Intentos',9],['Último motivo',28],['Prioridad',9],['Horario',13],['Nota',28]]);
+  for(const p of R.pendientes){const st=D===hoy()?etiquetaEstado(p)[0]:estadoEnDia(p,D)[0];w5.addRow([p.canal||'VTEX',p.order,p.receptor||p.cliente,p.distrito,[p.direccion,p.complemento].filter(Boolean).join(' · '),telDisp(p.telefono),p.unidades,fechaCorta(p.fechaCarga),fechaCorta(p.fechaPlan),fechaCorta(p.fechaLimite),(p.fechaLimite&&p.fechaLimite<D?'Vencido · ':'')+st,p.intentos||0,p.motivo||'',p.prioridad?'Sí':'',horarioTxt(p),p.nota||''])}
   zebra(w5);
   // Avisos
   const av=(S.avisos[D]||[]).slice().sort((a,b)=>a.t<b.t?-1:1);
@@ -1117,10 +1157,12 @@ document.addEventListener('click',async ev=>{
       S.db.doc('fotos/'+fotoId).set({pedido:targets.map(x=>x.id).join(','),order:targets.map(x=>x.order).join(', '),m:S.me||targets[0].motorizado,t,data:s.foto}).catch(e=>toast(e&&e.code==='permission-denied'?'La foto no se guardó: falta actualizar las reglas de Firestore (fotos).':errMsg(e)));
       for(const q of targets){const r=ultimoRecojoAntes(q,t);
         await actualizar(q,{estado:'entregado',entregadoAt:t,foto:true,fotoId,tiempoMin:r?Math.round((Date.parse(t)-Date.parse(r.t))/60000):null},{t,tipo:'entrega',m:S.me||q.motorizado,salida:q.salida,obs:s.obs});}
-      closeSheet();render();toast((targets.length>1?targets.length+' pedidos entregados':'Entregado')+' a las '+hLocal(t));
+      closeSheet();render();toast((targets.length>1?targets.length+' pedidos entregados':esRec(targets[0])?'Recogido':'Entregado')+' a las '+hLocal(t));
     });break}
     case 'verFoto':verFoto(p);break;
     case 'mapa':openSheet({k:'mapa',id});break;
+    case 'recojoAsk':openSheet({k:'recojo'});break;
+    case 'prio':if(p){S.db.doc('pedidos/'+p.id).update({prioridad:!p.prioridad}).catch(e=>toast(errMsg(e)));S.pedidos.set(p.id,{...p,prioridad:!p.prioridad});render();toast(p.prioridad?'Prioridad quitada':'Marcado como prioridad')}break;
     case 'limpiarFotos':limpiarFotos();break;
     case 'noEntAsk':openSheet({k:'no',id});break;
     case 'motivo':S.sheet.motivo=el.dataset.m;S.sheet.obs=(document.getElementById('f-obs')||{}).value||'';S.sheet.para=(document.getElementById('f-para')||{}).value||'';renderSheet();break;
@@ -1178,6 +1220,19 @@ document.addEventListener('submit',async ev=>{
     if(!S.pinHash){try{await S.db.doc('config/general').set({pinHash:h},{merge:true});S.pinHash=h}catch(e){toast(errMsg(e));return}toast('PIN guardado')}
     else if(h!==S.pinHash){toast('PIN incorrecto');[0,1,2,3].forEach(i=>document.getElementById('pin'+i).value='');document.getElementById('pin0').focus();return}
     S.ofiOk=true;ls.set('arena.ofiOk','1');render();return}
+  if(f.dataset.form==='indic'){ev.preventDefault();const p=S.pedidos.get(S.sheet&&S.sheet.id);if(!p)return;
+    const g=k=>document.getElementById('in-'+k);
+    const datos={prioridad:g('prio').checked,horaDesde:g('desde').value||'',horaHasta:g('hasta').value||'',nota:g('nota').value.trim()};
+    if(datos.horaDesde&&datos.horaHasta&&datos.horaDesde>datos.horaHasta){toast('La hora “hasta” debe ser después de “desde”');return}
+    S.pedidos.set(p.id,{...p,...datos});S.db.doc('pedidos/'+p.id).update(datos).catch(e=>toast(errMsg(e)));renderSheet();render();toast('Indicaciones guardadas');return}
+  if(f.dataset.form==='recojo'){ev.preventDefault();const g=k=>document.getElementById('rc-'+k).value.trim();
+    const fec=g('fec')||hoy(),t=nowISO(),id=idDe('REC-'+Date.now().toString(36).toUpperCase());
+    const datos={id,tipo:'recojo',canal:'Recojo',order:g('ped')||'Recojo',cliente:g('cli'),receptor:'',telefono:g('tel'),direccion:g('dir'),complemento:'',referencia:g('ref'),distrito:g('dis'),ciudad:'Lima',
+      items:[{n:g('que'),q:1}],unidades:0,total:0,fechaPedido:fec,fechaLimite:'',fechaCarga:fec,fechaPlan:fec,estado:'pendiente',intentos:0,motorizado:'',salida:0,recogidoAt:'',entregadoAt:'',motivo:'',
+      prioridad:document.getElementById('rc-prio').checked,horaDesde:g('desde'),horaHasta:g('hasta'),nota:g('nota'),historial:[{t,tipo:'carga'}],cargadoAt:t,actualizado:t};
+    if(datos.horaDesde&&datos.horaHasta&&datos.horaDesde>datos.horaHasta){toast('La hora “hasta” debe ser después de “desde”');return}
+    S.db.doc('pedidos/'+id).set(datos).catch(e=>toast(errMsg(e)));S._A=new Map(S._A||[]);S._A.set(id,datos);mezclar();
+    closeSheet();toast('Recojo creado para el '+fechaCorta(fec));return}
   if(f.dataset.form==='punto'){ev.preventDefault();const c=f.dataset.c,g=k=>document.getElementById(`pt-${c}-${k}`).value.trim();
     const pts={...S.puntos,[c]:{direccion:g('dir'),distrito:g('dis')||'San Isidro',telefono:g('tel'),referencia:g('ref')}};
     try{await S.db.doc('config/general').set({puntos:pts},{merge:true});S.puntos=pts;mezclar();toast('Punto de '+c+' guardado')}catch(e){toast(errMsg(e))}return}
