@@ -1093,6 +1093,22 @@ async function descargarExcel(){
   head(w3,[['Canal',11],['Pedido',20],['Cliente',24],['Recibe',24],['Distrito',18],['Motorizado',18],['Salida',8],['Hora recojo',11],['Hora entrega',11],['Tiempo (h:mm)',12],['Tiempo (min)',11],['Fecha límite VTEX',13],['A tiempo',9],['Foto',7],['Quién recibió / obs.',30]]);
   for(const {p,e} of R.entregas){const rc=ultimoRecojoAntes(p,e.t);const mn=minutosEntrega(p,e);w3.addRow([p.canal||'VTEX',p.order,p.cliente,p.receptor,p.distrito,e.m,e.salida||'',rc?hLocal(rc.t):'',hLocal(e.t),hmm(mn),mn!=null?Math.round(mn):'',fechaCorta(p.fechaLimite),aTiempoTxt(p),p.foto?'Sí':'No',e.obs||''])}
   zebra(w3);
+  // Fotos dentro del Excel (miniatura en la columna Foto)
+  const conFoto=R.entregas.filter(({p})=>p.foto);
+  if(conFoto.length){
+    toast(`Agregando ${conFoto.length} foto${conFoto.length!==1?'s':''} al Excel…`);
+    const cache={};
+    await Promise.all([...new Set(conFoto.map(({p})=>p.fotoId||p.id))].map(async fid=>{try{const d=await S.db.doc('fotos/'+fid).get();if(d.exists)cache[fid]=d.data().data}catch(e){}}));
+    const colF=14,imgIds={};w3.getColumn(colF).width=19;
+    R.entregas.forEach(({p},i)=>{
+      if(!p.foto)return;const row=i+2,data=cache[p.fotoId||p.id];const cell=w3.getRow(row).getCell(colF);
+      if(!data||!/^data:image\/(jpe?g|png)/.test(data)){cell.value='Sí (ver en la app)';return}
+      try{const fid=p.fotoId||p.id;const img=imgIds[fid]!=null?imgIds[fid]:(imgIds[fid]=wb.addImage({base64:data,extension:/png/.test(data.slice(0,20))?'png':'jpeg'}));
+        cell.value='';w3.getRow(row).height=86;
+        w3.addImage(img,{tl:{col:colF-1+0.05,row:row-1+0.05},ext:{width:128,height:108},editAs:'oneCell'});
+      }catch(e){cell.value='Sí (ver en la app)'}
+    });
+  }
   // No entregados
   const w4=wb.addWorksheet('No entregados');
   head(w4,[['Canal',11],['Pedido',20],['Cliente / recibe',26],['Distrito',18],['Teléfono',14],['Motorizado',18],['Salida',8],['Hora',9],['Motivo',30],['Detalle',34],['Reprogramado para',16]]);
