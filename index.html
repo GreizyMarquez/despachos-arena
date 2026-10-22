@@ -111,10 +111,17 @@ label.fld{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:
 .canal.c-Falabella{border-color:#9BBF2A;color:#5C7A00}
 .canal.c-Ripley{border-color:#7B5BA8;color:#5B3D86}
 .canal.c-Recojo{border-color:var(--warn);color:var(--warn)}
+.canal.c-Extra{border-color:var(--accent);color:var(--accent)}
 .prio{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:6px;padding:2px 7px;background:var(--bad);color:#fff}
 .card.is-prio{border-color:var(--bad);box-shadow:0 0 0 1px var(--bad) inset}
 .star{border:0;background:none;padding:0 2px;font-size:18px;line-height:1;color:var(--line);cursor:pointer}
 .star.on{color:var(--warn)}
+.cam{position:fixed;inset:0;z-index:80;background:#000;display:flex;flex-direction:column}
+.cam video{flex:1;min-height:0;width:100%;object-fit:cover;background:#000}
+.cam-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px calc(18px + env(safe-area-inset-bottom,0px));background:#000}
+.cam-bar .btn{background:transparent;color:#fff;border-color:#555;min-width:96px}
+.shutter{width:74px;height:74px;border-radius:50%;border:5px solid #fff;background:#fff;box-shadow:inset 0 0 0 4px #000;cursor:pointer}
+.shutter:active{transform:scale(.94)}
 .group-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .group-row{display:flex;gap:10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);font-size:13.5px}
 .group-row:last-child{border-bottom:0}
@@ -293,7 +300,7 @@ const INACT_MIN=60;
 
 /* ---------- data helpers ---------- */
 function etiquetaEstado(p){
-  if(p.estado==='entregado')return[esRec(p)?'Recogido':'Entregado','st-entregado'];
+  if(p.estado==='entregado')return[esExtra(p)?'Terminado':esRec(p)?'Recogido':'Entregado','st-entregado'];
   if(p.estado==='en_ruta')return['En ruta','st-en_ruta'];
   if((p.intentos||0)>0)return['Reprogramado','st-reprog'];
   return['Por recoger','st-pendiente'];
@@ -310,6 +317,7 @@ function conDestino(p){
   return {...p,receptor:p.canal+' · punto de entrega',direccion:pt.direccion||'Falta la dirección: configúrala en Oficina › Ajustes',complemento:'',distrito:pt.distrito||'San Isidro',ciudad:'Lima',referencia:pt.referencia||'',telefono:pt.telefono||''};
 }
 const esRec=p=>p.tipo==='recojo';
+const esExtra=p=>p.tipo==='extra';
 const ahoraHM=()=>hLocal(Date.now());
 function ordenUrg(a,b){
   if(!!a.prioridad!==!!b.prioridad)return a.prioridad?-1:1;
@@ -393,7 +401,7 @@ function estadoEnDia(p,D){
   const last=[...evs].reverse().find(e=>['recojo','entrega','no_entrega'].includes(e.tipo));
   if(D===hoy())return etiquetaEstado(p);
   if(!last)return p.entregadoAt&&dLocal(p.entregadoAt)<=D?[esRec(p)?'Recogido':'Entregado','st-entregado']:['Sin salir','st-pendiente'];
-  if(last.tipo==='entrega')return[esRec(p)?'Recogido':'Entregado','st-entregado'];
+  if(last.tipo==='entrega')return[esExtra(p)?'Terminado':esRec(p)?'Recogido':'Entregado','st-entregado'];
   if(last.tipo==='no_entrega')return[esRec(p)?'No recogido':'No entregado','st-noent'];
   return['En ruta al cierre','st-en_ruta'];
 }
@@ -436,6 +444,22 @@ function render(){
   if(fid){const el=document.getElementById(fid);if(el){el.focus();try{if(ss!=null)el.setSelectionRange(ss,ss)}catch(e){}}}
 }
 function renderBar(html){document.getElementById('bar').innerHTML=html}
+
+/* Deshacer una entrega / no entrega marcada por error (mismo día) */
+function ultimoEvento(p){const h=(p.historial||[]).filter(e=>['recojo','entrega','no_entrega','devuelto','reabrir'].includes(e.tipo));return h[h.length-1]||null}
+function puedeDeshacer(p,e){const u=ultimoEvento(p);return !!u&&u.t===e.t&&u.tipo===e.tipo&&dLocal(e.t)===hoy()&&((e.tipo==='entrega'&&p.estado==='entregado')||(e.tipo==='no_entrega'&&p.estado==='pendiente'))}
+async function deshacer(p){
+  const e=ultimoEvento(p);if(!e||!puedeDeshacer(p,e)){toast('Ya no se puede deshacer este pedido');return}
+  const t=nowISO(),hist=(p.historial||[]).filter(x=>x!==e&&!(x.t===e.t&&x.tipo===e.tipo));
+  hist.push({t,tipo:'deshecho',de:e.tipo,m:S.me||e.m,hora:e.t});
+  const datos=e.tipo==='entrega'
+    ?{estado:'en_ruta',entregadoAt:'',foto:false,fotoId:'',tiempoMin:null,motorizado:e.m,salida:e.salida||p.salida||1}
+    :{estado:'en_ruta',motorizado:e.m,salida:e.salida||1,intentos:Math.max(0,(p.intentos||0)-1),fechaPlan:hoy(),motivo:''};
+  Object.assign(datos,{historial:hist,actualizado:t});
+  if(e.tipo==='entrega'&&p.foto&&(p.fotoId||p.id)===p.id)S.db.doc('fotos/'+p.id).delete().catch(()=>{});
+  S.pedidos.set(p.id,{...p,...datos});
+  S.db.doc('pedidos/'+p.id).update(datos).catch(x=>toast(errMsg(x)));
+}
 
 /* PIN de Oficina */
 async function sha(t){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('arena-despachos:'+t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
@@ -485,12 +509,13 @@ function vMoto(){
   }else{
     renderBar('');
     const all=[...entHoy.map(x=>({...x,k:'e'})),...noHoy.map(x=>({...x,k:'n'}))].sort((a,b)=>a.e.t<b.e.t?1:-1);
-    body=all.length?`<div class="list">${all.map(x=>`<div class="card"><div class="card-head"><div class="grow"><div class="ord">${esc(x.p.order)} · Salida ${x.e.salida||'—'}</div><div class="who">${esc(x.p.receptor||x.p.cliente)}</div><div class="addr"><span class="dist">${esc(x.p.distrito)}</span></div></div>
-      ${x.k==='e'?`<span class="pill st-entregado">${esRec(x.p)?'Recogido ':''}${hLocal(x.e.t)}</span>`:`<span class="pill st-noent">${esRec(x.p)?'No recogido':'No entregado'} ${hLocal(x.e.t)}</span>`}</div>
-      ${x.k==='n'?`<div class="note bad">${esc(x.e.motivo)}${x.e.para?' · Reprogramado para el '+fechaCorta(x.e.para):''}</div>`:`<div class="meta"><span>Tiempo <b>${durTxt(minutosEntrega(x.p,x.e))}</b></span><span>${x.p.foto?'Con foto':'Sin foto'}</span>${x.e.obs?`<span>${esc(x.e.obs)}</span>`:''}</div>`}</div>`).join('')}</div>`
+    body=all.length?`<div class="list">${all.map(x=>`<div class="card"><div class="card-head"><div class="grow"><div class="ord">${canalTag(x.p)} ${esc(x.p.order)} · Salida ${x.e.salida||'—'}</div><div class="who">${esc(esExtra(x.p)?((x.p.items||[])[0]||{}).n||'Encargo extra':(x.p.receptor||x.p.cliente))}</div><div class="addr"><span class="dist">${esc(x.p.distrito)}</span></div></div>
+      ${x.k==='e'?`<span class="pill st-entregado">${esExtra(x.p)?'Terminado ':esRec(x.p)?'Recogido ':''}${hLocal(x.e.t)}</span>`:`<span class="pill st-noent">${esRec(x.p)?'No recogido':'No entregado'} ${hLocal(x.e.t)}</span>`}</div>
+      ${x.k==='n'?`<div class="note bad">${esc(x.e.motivo)}${x.e.para?' · Reprogramado para el '+fechaCorta(x.e.para):''}</div>`:`<div class="meta"><span>Tiempo <b>${durTxt(minutosEntrega(x.p,x.e))}</b></span><span>${x.p.foto?'Con foto':'Sin foto'}</span>${x.e.obs?`<span>${esc(x.e.obs)}</span>`:''}</div>`}
+      ${puedeDeshacer(x.p,x.e)?`<div class="row" style="justify-content:flex-end"><button class="btn ghost sm" data-act="deshacerAsk" data-id="${esc(x.p.id)}">↶ Deshacer</button></div>`:''}</div>`).join('')}</div>`
       :`<div class="empty"><h3>Aún no hay entregas hoy</h3><p>Lo que entregues aparecerá aquí con la hora.</p></div>`;
   }
-  return `<div class="row spread"><div><div class="eyebrow">${esc(fechaLarga(d))}</div><h1>Hola, ${esc(S.me.split(' ')[0])}</h1></div><button class="btn ghost sm" data-act="cambiarMoto">Cambiar</button></div>
+  return `<div class="row spread"><div><div class="eyebrow">${esc(fechaLarga(d))}</div><h1>Hola, ${esc(S.me.split(' ')[0])}</h1></div><div class="row" style="gap:6px"><button class="btn sm" data-act="extraAsk" ${S.readOnly?'disabled':''}>+ Encargo extra</button><button class="btn ghost sm" data-act="cambiarMoto">Cambiar</button></div></div>
   ${(()=>{const np=[...rec,...mios].filter(p=>p.prioridad).length;return np?`<div class="note bad"><b>★ ${np} pedido${np!==1?'s':''} con prioridad.</b> Llévalo${np!==1?'s':''} y entrégalo${np!==1?'s':''} primero.</div>`:''})()}
   ${mios.some(p=>p.fechaLimite&&p.fechaLimite<=d)?`<div class="note bad">Tienes ${mios.filter(p=>p.fechaLimite&&p.fechaLimite<=d).length} pedido(s) en ruta que vencen hoy o ya vencieron. Entrégalos primero.</div>`:''}
   ${S.readOnly?'<div class="note bad">Solo puedes ver los pedidos. Para marcar recojos y entregas, la oficina debe invitarte por correo como Editor.</div>':''}
@@ -544,7 +569,17 @@ function cardGrupo(ps){
     <button class="btn ok" data-act="entAskG" data-ids="${esc(ids)}" ${S.readOnly?'disabled':''}>${IC.check}${ps.length>1?`Entregué los ${ps.length} en ${esc(p.canal)}`:`Entregué el pedido en ${esc(p.canal)}`}</button>
   </div>`;
 }
+function cardExtra(p){
+  const que=((p.items||[])[0]||{}).n||'Encargo extra';
+  return `<div class="card">
+    <div class="card-head"><div class="grow"><div class="ord">${canalTag(p)} Desde ${hLocal(p.recogidoAt)}${p.cliente&&p.cliente!=='Encargo extra'?' · pedido por '+esc(p.cliente):''}</div><div class="who">${esc(que)}</div></div></div>
+    ${p.direccion||p.distrito?`<div class="addr">${p.distrito?`<span class="dist">${esc(p.distrito)}</span><br>`:''}${esc(p.direccion||'')}</div>`:''}
+    ${p.direccion?`<button class="btn sm" data-act="mapa" data-id="${esc(p.id)}">${IC.map}Mapa</button>`:''}
+    <div class="acts2"><button class="btn bad" data-act="anularAsk" data-id="${esc(p.id)}">Anular</button><button class="btn ok" data-act="entAsk" data-id="${esc(p.id)}">${IC.check}Terminado</button></div>
+  </div>`;
+}
 function cardRuta(p){
+  if(esExtra(p))return cardExtra(p);
   const tel=p.telefono,nombre=(p.receptor||p.cliente||'').split(' ')[0];
   const wa=waLink(tel,esRec(p)?`Hola ${nombre}, le saluda el motorizado de Arena Perú. Estoy en camino para recoger su paquete.`:`Hola ${nombre}, le saluda el motorizado de Arena Perú. Estoy en camino con su pedido ${p.order}.`);
   return `<div class="card ${p.prioridad?'is-prio':''}">
@@ -679,6 +714,7 @@ function vDash(){
       if(e.tipo==='no_entrega'){if(d>=ini&&d<=fin){noe.push({p,e});motivos[e.motivo||'Otro']=(motivos[e.motivo||'Otro']||0)+1;const k=d+'|'+e.m;(jornadas[k]=jornadas[k]||{ini:null,fin:null});if(!jornadas[k].fin||e.t>jornadas[k].fin)jornadas[k].fin=e.t;(motos[e.m]=motos[e.m]||{n:0,no:0,min:[]}).no++}previoNo=true;continue}
       if(e.tipo==='recojo'&&d>=ini&&d<=fin){const k=d+'|'+e.m;(jornadas[k]=jornadas[k]||{ini:null,fin:null});if(!jornadas[k].ini||e.t<jornadas[k].ini)jornadas[k].ini=e.t}
       if(e.tipo!=='entrega'||d<ini||d>fin)continue;
+      if(esExtra(p)){const k=d+'|'+e.m;(jornadas[k]=jornadas[k]||{ini:null,fin:null});if(!jornadas[k].fin||e.t>jornadas[k].fin)jornadas[k].fin=e.t;continue}
       const min=minutosEntrega(p,e),dd=diffDays(p.fechaCarga,d);
       ent.push({p,e,min,dd,primer:!previoNo});
       dias[d]=(dias[d]||0)+1;
@@ -727,8 +763,53 @@ function vDash(){
 }
 
 /* ---------- sheets ---------- */
-function openSheet(s){S.sheet=s;renderSheet()}
-function closeSheet(){S.sheet=null;S.busy=false;document.getElementById('sheet').innerHTML=''}
+function openSheet(s){S.sheet=s;if(s.k==='ent')guardarPendiente();renderSheet()}
+function closeSheet(){if(S.sheet&&S.sheet.k==='ent')borrarPendiente();cerrarCamara();S.sheet=null;S.busy=false;document.getElementById('sheet').innerHTML=''}
+/* Entrega a medio hacer: si el teléfono cierra la app (pasa en Android al abrir la cámara), se retoma sola */
+function guardarPendiente(){const s=S.sheet;if(!s||s.k!=='ent')return;try{localStorage.setItem('arena.pend',JSON.stringify({id:s.id||null,ids:s.ids||null,obs:s.obs||'',foto:s.foto||null,me:S.me,t:Date.now()}))}catch(e){}}
+function borrarPendiente(){try{localStorage.removeItem('arena.pend')}catch(e){}}
+function retomarPendiente(){
+  if(S._retomado||!S._A)return;S._retomado=true;
+  let x=null;try{x=JSON.parse(localStorage.getItem('arena.pend')||'null')}catch(e){}
+  if(!x||Date.now()-x.t>3*3600e3||x.me!==S.me){borrarPendiente();return}
+  const ids=x.ids||[x.id];if(!ids.every(i=>{const p=S.pedidos.get(i);return p&&p.estado==='en_ruta'})){borrarPendiente();return}
+  S.view='moto';S.motoTab='ruta';
+  openSheet({k:'ent',id:x.id,ids:x.ids,obs:x.obs,foto:x.foto,preview:x.foto});
+  toast(x.foto?'Retomamos tu entrega: confirma para guardarla':'Retomamos tu entrega: toma la foto');
+}
+/* Cámara dentro de la app (no sale a la cámara del teléfono) */
+const camInterna=()=>!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia);
+let _cam=null;
+async function abrirCamara(){
+  cerrarCamara();
+  const box=document.createElement('div');box.className='cam';box.setAttribute('role','dialog');box.setAttribute('aria-label','Cámara');
+  box.innerHTML=`<video playsinline autoplay muted></video><div class="cam-bar"><button class="btn" data-act="camCerrar">Cancelar</button><button class="shutter" data-act="camFoto" aria-label="Tomar foto"></button><span style="min-width:96px"></span></div>`;
+  document.body.appendChild(box);_cam={box,stream:null};
+  try{
+    const st=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:960}},audio:false});
+    if(!_cam||_cam.box!==box){st.getTracks().forEach(t=>t.stop());return}
+    _cam.stream=st;const v=box.querySelector('video');v.srcObject=st;await v.play().catch(()=>{});
+  }catch(e){
+    cerrarCamara();
+    if(S.sheet){S.sheet.camFalla=true;renderSheet()}
+    toast(e&&e.name==='NotAllowedError'?'Permite el acceso a la cámara para esta app, o usa “Tomar foto” de nuevo para abrir la cámara del teléfono.':'No se pudo abrir la cámara aquí. Toca “Tomar foto” otra vez para usar la del teléfono.');
+  }
+}
+function cerrarCamara(){if(!_cam)return;try{_cam.stream&&_cam.stream.getTracks().forEach(t=>t.stop())}catch(e){}_cam.box.remove();_cam=null}
+function capturarCamara(){
+  if(!_cam||!S.sheet)return;const v=_cam.box.querySelector('video');const w=v.videoWidth,h=v.videoHeight;if(!w||!h){toast('La cámara aún no está lista');return}
+  const du=comprimirDesde(v,w,h);cerrarCamara();
+  if(!du){toast('No se pudo guardar la foto. Intenta otra vez.');return}
+  S.sheet.foto=du;S.sheet.preview=du;guardarPendiente();renderSheet();
+}
+function comprimirDesde(src,w,h){
+  for(const [max,q] of [[1000,.6],[800,.5],[640,.45],[480,.4]]){
+    const k=Math.min(1,max/Math.max(w,h));const c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);
+    c.getContext('2d').drawImage(src,0,0,c.width,c.height);
+    const du=c.toDataURL('image/jpeg',q);if(du.length<180000)return du;
+  }
+  return null;
+}
 function renderSheet(){
   const s=S.sheet,host=document.getElementById('sheet');
   if(!s){host.innerHTML='';return}
@@ -742,16 +823,16 @@ function renderSheet(){
       <p class="muted" style="margin:0;font-size:13px">Se guardará la hora de recojo. Los demás quedan en “Por recoger”.</p>
       <div class="acts2"><button class="btn" data-act="close">Volver</button><button class="btn primary" data-act="salidaGo" ${S.busy?'disabled':''}>${S.busy?'Guardando…':'Sí, me los llevo'}</button></div>`;
   }else if(s.k==='ent'&&p){
-    h=`<div><div class="eyebrow">${s.ids?esc(p.canal)+' · '+nG+' pedido'+(nG!==1?'s':''):esc(p.order)+' · '+esc(p.distrito)}</div><h2>${s.ids?'Entrega en '+esc(p.canal):esRec(p)?'Recojo donde '+esc(p.cliente):'Entrega a '+esc(p.receptor||p.cliente)}</h2></div>
+    h=`<div><div class="eyebrow">${s.ids?esc(p.canal)+' · '+nG+' pedido'+(nG!==1?'s':''):esc(p.order)+' · '+esc(p.distrito)}</div><h2>${s.ids?'Entrega en '+esc(p.canal):esExtra(p)?'Terminar: '+esc(((p.items||[])[0]||{}).n||'encargo extra'):esRec(p)?'Recojo donde '+esc(p.cliente):'Entrega a '+esc(p.receptor||p.cliente)}</h2></div>
       ${s.ids?`<p class="muted" style="margin:0;font-size:13.5px">Se marcan como entregados a la misma hora: ${s.ids.map(i=>esc((S.pedidos.get(i)||{}).order||i)).join(', ')}. Una sola foto para todos.</p>`:''}
       <div class="photo-drop" style="min-height:${s.preview?'0':'140px'}">${s.preview?`<img src="${s.preview}" alt="Foto de entrega">`:`<div>${IC.cam.replace('<svg','<svg style="width:36px;height:36px"')}<div style="font-weight:700;color:var(--ink);margin-top:6px">${s.leyendo?'Procesando foto…':(esRec(p)?'Foto del paquete recogido':'Foto de la entrega')}</div><div style="font-size:13px">${esRec(p)?'El paquete que te entregó el cliente':'Paquete con el cliente o en la puerta'}</div></div>`}</div>
       <div class="acts2">
-        <label class="btn" style="position:relative;overflow:hidden">${IC.cam}${s.preview?'Otra foto':'Tomar foto'}<input id="f-foto" type="file" accept="image/*" capture="environment" data-act="foto" aria-label="Tomar foto con la cámara" style="position:absolute;inset:0;opacity:0"></label>
+        ${camInterna()&&!s.camFalla?`<button class="btn" data-act="camara">${IC.cam}${s.preview?'Otra foto':'Tomar foto'}</button>`:`<label class="btn" style="position:relative;overflow:hidden">${IC.cam}${s.preview?'Otra foto':'Tomar foto'}<input id="f-foto" type="file" accept="image/*" capture="environment" data-act="foto" aria-label="Tomar foto con la cámara" style="position:absolute;inset:0;opacity:0"></label>`}
         <label class="btn" style="position:relative;overflow:hidden">${IC.up}Desde galería<input id="f-foto2" type="file" accept="image/*" data-act="foto" aria-label="Elegir foto de la galería" style="position:absolute;inset:0;opacity:0"></label>
       </div>
       <label class="fld"><span>${esRec(p)?'¿Quién entregó el paquete? (opcional)':'¿Quién recibió? (opcional)'}</span><textarea id="f-obs" class="input" placeholder="${esRec(p)?'Ej.: lo entregó la señora Ana':'Ej.: recibió el portero'}">${esc(s.obs||'')}</textarea></label>
-      <div class="acts2"><button class="btn" data-act="close">Cancelar</button><button class="btn ok" data-act="entGo" ${!s.foto||S.busy?'disabled':''}>${S.busy?'Guardando…':(esRec(p)&&!s.ids?'Confirmar recojo':'Confirmar entrega')}</button></div>
-      <p class="muted" style="margin:0;font-size:12.5px;text-align:center">La foto es obligatoria. La hora se guarda al confirmar. Si no hay señal, la foto se sube sola cuando vuelva.</p>`;
+      <div class="acts2"><button class="btn" data-act="close">Cancelar</button><button class="btn ok" data-act="entGo" ${(!s.foto&&!esExtra(p))||S.busy?'disabled':''}>${S.busy?'Guardando…':(esExtra(p)?'Marcar terminado':esRec(p)&&!s.ids?'Confirmar recojo':'Confirmar entrega')}</button></div>
+      <p class="muted" style="margin:0;font-size:12.5px;text-align:center">${esExtra(p)?'La foto es opcional en encargos extra.':'La foto es obligatoria.'} La hora se guarda al confirmar. Si no hay señal, la foto se sube sola cuando vuelva.</p>`;
   }else if(s.k==='verfoto'){
     h=`<div class="row spread"><div><div class="eyebrow">${esc(s.order||'')}</div><h2>Foto de entrega</h2></div><button class="btn ghost sm" data-act="close">Cerrar</button></div>
       ${s.src?`<img class="full-img" src="${s.src}" alt="Foto de entrega">${s.info?`<p class="muted" style="margin:0;font-size:13px;text-align:center">${esc(s.info)}</p>`:''}`:`<p class="muted">${s.err?esc(s.err):'Cargando foto…'}</p>`}`;
@@ -764,7 +845,7 @@ function renderSheet(){
       <div class="acts2"><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="noGo" ${!s.motivo||S.busy?'disabled':''}>${S.busy?'Guardando…':'Reprogramar'}</button></div>
       <button class="btn ghost sm" data-act="devolver" data-id="${esc(p.id)}">Lo llevé por error: devolver a “Por recoger” sin registrar intento</button>`;
   }else if(s.k==='detalle'&&p){
-    const tipos={carga:esRec(p)?'Recojo creado':'Cargado',recojo:esRec(p)?'Salió a recoger':'Recogido',entrega:esRec(p)?'Recogido donde cliente':'Entregado',no_entrega:esRec(p)?'No se pudo recoger':'No entregado',devuelto:'Devuelto a almacén',reabrir:'Reabierto'};
+    const tipos={deshecho:'Deshecho por error',carga:esExtra(p)?'Encargo creado':esRec(p)?'Recojo creado':'Cargado',recojo:esRec(p)?'Salió a recoger':'Recogido',entrega:esRec(p)?'Recogido donde cliente':'Entregado',no_entrega:esRec(p)?'No se pudo recoger':'No entregado',devuelto:'Devuelto a almacén',reabrir:'Reabierto'};
     h=`<div class="row spread"><div><div class="eyebrow">${canalTag(p)} ${esc(p.order)}</div><h2>${esc(esMkt(p)?p.cliente:(p.receptor||p.cliente))}</h2>${esMkt(p)?`<div class="muted" style="font-size:13px">Se entrega en el punto de ${esc(p.canal)}${p.distritoCliente?' · cliente en '+esc(p.distritoCliente):''}</div>`:''}</div>${pill(p)}</div>
       <div class="addr"><span class="dist">${esc(p.distrito)}</span> · ${esc(p.ciudad)}<br>${esc(p.direccion)}${p.complemento?' · '+esc(p.complemento):''}${p.referencia?'<br>Ref: '+esc(p.referencia):''}</div>
       <div class="meta"><span>Tel. <b class="mono">${esc(telDisp(p.telefono))||'—'}</b></span><span>${p.unidades||0} und.</span>${p.total?`<span>S/ <b>${Number(p.total).toFixed(2)}</b></span>`:''}<span>Cargado <b>${fechaCorta(p.fechaCarga)}</b></span>${p.fechaLimite?`<span>Límite VTEX <b>${fechaCorta(p.fechaLimite)}</b></span>`:''}${p.fechaPlan&&p.fechaPlan!==p.fechaCarga?`<span>Programado <b>${fechaCorta(p.fechaPlan)}</b></span>`:''}</div>
@@ -782,6 +863,27 @@ function renderSheet(){
       <button class="btn" data-act="close">Cerrar</button>`;
   }else if(s.k==='import'){h=sheetImport(s)}
   else if(s.k==='aviso'){h=sheetAviso(s)}
+  else if(s.k==='deshacer'&&p){const e=ultimoEvento(p);const ent=e&&e.tipo==='entrega';
+    h=`<div><div class="eyebrow">${canalTag(p)} ${esc(p.order)}</div><h2>¿Deshacer ${ent?(esExtra(p)?'“terminado”':esRec(p)?'el recojo':'la entrega'):'el “no entregado”'}?</h2></div>
+    <p style="margin:0">${esc(esExtra(p)?((p.items||[])[0]||{}).n:(p.receptor||p.cliente))} · marcado a las ${hLocal(e&&e.t)}</p>
+    <p class="muted" style="margin:0;font-size:14px">El pedido vuelve a <b>En ruta</b> como si no lo hubieras marcado${ent&&p.foto?' y se borra la foto':''}. La oficina verá que lo deshiciste.</p>
+    <div class="acts2"><button class="btn" data-act="close">No</button><button class="btn primary" data-act="deshacerGo" data-id="${esc(p.id)}">Sí, deshacer</button></div>`}
+  else if(s.k==='anular'&&p){h=`<div><div class="eyebrow">Encargo extra</div><h2>¿Anular este encargo?</h2></div><p style="margin:0">${esc(((p.items||[])[0]||{}).n||'')}</p><p class="muted" style="margin:0;font-size:14px">Se borra y no cuenta en tus horas.</p>
+    <div class="acts2"><button class="btn" data-act="close">No</button><button class="btn bad" data-act="anularGo" data-id="${esc(p.id)}">Sí, anular</button></div>`}
+  else if(s.k==='extra'){h=`<div><div class="eyebrow">Cuenta en tus horas</div><h2>Encargo extra</h2></div>
+    <p class="muted" style="margin:0;font-size:14px">Deliverys o encargos que te pidan fuera de los pedidos del día.</p>
+    <form class="list" data-form="extra" style="gap:10px">
+      <label class="fld"><span>¿Qué vas a hacer o hiciste?</span><input id="ex-que" class="input" required maxlength="140" placeholder="Ej.: llevar documentos al banco"></label>
+      <div class="row"><label class="fld grow"><span>Lugar (opcional)</span><input id="ex-dir" class="input" maxlength="140" placeholder="Dirección"></label><label class="fld grow"><span>Distrito (opcional)</span><input id="ex-dis" class="input" maxlength="60"></label></div>
+      <label class="fld"><span>¿Quién lo pidió? (opcional)</span><input id="ex-por" class="input" maxlength="60" placeholder="Ej.: jefe"></label>
+      <div class="list" style="gap:8px;border:1px solid var(--line);border-radius:10px;padding:12px">
+        <label class="row" style="font-weight:650"><input type="radio" name="ex-modo" id="ex-ahora" value="ahora" checked style="width:20px;height:20px"> Empiezo ahora (marco “Terminado” al acabar)</label>
+        <label class="row" style="font-weight:650"><input type="radio" name="ex-modo" id="ex-hecho" value="hecho" style="width:20px;height:20px"> Ya lo hice hoy</label>
+        <div class="row"><label class="fld grow"><span>Empecé a las</span><input id="ex-ini" class="input" type="time"></label><label class="fld grow"><span>Terminé a las</span><input id="ex-fin" class="input" type="time"></label></div>
+        <span class="muted" style="font-size:12.5px">Las horas solo se usan si marcaste “Ya lo hice hoy”.</span>
+      </div>
+      <div class="acts2"><button class="btn" type="button" data-act="close">Cancelar</button><button class="btn primary" type="submit">Guardar</button></div>
+    </form>`}
   else if(s.k==='recojo'){h=`<div><div class="eyebrow">Recojo donde cliente</div><h2>Nuevo recojo</h2></div>
     <form class="list" data-form="recojo" style="gap:10px">
       <div class="row"><label class="fld grow"><span>Nombre del cliente</span><input id="rc-cli" class="input" required maxlength="80"></label><label class="fld grow"><span>Teléfono</span><input id="rc-tel" class="input" inputmode="tel" maxlength="20"></label></div>
@@ -1016,12 +1118,7 @@ async function fotoChica(file){
   try{src=await createImageBitmap(file);w=src.width;h=src.height}
   catch(e){const img=new Image();const u=URL.createObjectURL(file);img.src=u;await img.decode();src=img;w=img.naturalWidth;h=img.naturalHeight;setTimeout(()=>URL.revokeObjectURL(u),1000)}
   // ~80 KB por foto: alcanza para miles de entregas dentro del plan gratuito
-  for(const [max,q] of [[1000,.6],[800,.5],[640,.45],[480,.4]]){
-    const k=Math.min(1,max/Math.max(w,h));const c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);
-    c.getContext('2d').drawImage(src,0,0,c.width,c.height);
-    const du=c.toDataURL('image/jpeg',q);if(du.length<180000)return du;
-  }
-  throw new Error('foto muy pesada');
+  const du=comprimirDesde(src,w,h);if(!du)throw new Error('foto muy pesada');return du;
 }
 async function verFoto(p){
   if(!p)return;openSheet({k:'verfoto',order:p.order});
@@ -1148,20 +1245,28 @@ document.addEventListener('click',async ev=>{
     });break;
     case 'entAsk':openSheet({k:'ent',id});break;
     case 'entAskG':openSheet({k:'ent',ids:el.dataset.ids.split(',')});break;
-    case 'entGo':{const s=S.sheet;s.obs=(document.getElementById('f-obs')||{}).value||'';if(!s.foto){toast('Toma la foto de la entrega');break}
+    case 'entGo':{const s=S.sheet;s.obs=(document.getElementById('f-obs')||{}).value||'';{const p0=S.pedidos.get(s.id||(s.ids||[])[0]);if(!s.foto&&!(p0&&esExtra(p0))){toast('Toma la foto de la entrega');break}}
       const targets=(s.ids||[s.id]).map(i=>S.pedidos.get(i)).filter(x=>x&&x.estado==='en_ruta');
       if(!targets.length){closeSheet();break}
       await hacer(async()=>{
       const t=nowISO();const fotoId=targets.length>1?idDe('G-'+targets[0].canal+'-'+t):targets[0].id;
       // la foto va en su propio documento; Firestore la guarda en el celular y la sube cuando hay señal
-      S.db.doc('fotos/'+fotoId).set({pedido:targets.map(x=>x.id).join(','),order:targets.map(x=>x.order).join(', '),m:S.me||targets[0].motorizado,t,data:s.foto}).catch(e=>toast(e&&e.code==='permission-denied'?'La foto no se guardó: falta actualizar las reglas de Firestore (fotos).':errMsg(e)));
+      if(s.foto)S.db.doc('fotos/'+fotoId).set({pedido:targets.map(x=>x.id).join(','),order:targets.map(x=>x.order).join(', '),m:S.me||targets[0].motorizado,t,data:s.foto}).catch(e=>toast(e&&e.code==='permission-denied'?'La foto no se guardó: falta actualizar las reglas de Firestore (fotos).':errMsg(e)));
       for(const q of targets){const r=ultimoRecojoAntes(q,t);
-        await actualizar(q,{estado:'entregado',entregadoAt:t,foto:true,fotoId,tiempoMin:r?Math.round((Date.parse(t)-Date.parse(r.t))/60000):null},{t,tipo:'entrega',m:S.me||q.motorizado,salida:q.salida,obs:s.obs});}
-      closeSheet();render();toast((targets.length>1?targets.length+' pedidos entregados':esRec(targets[0])?'Recogido':'Entregado')+' a las '+hLocal(t));
+        await actualizar(q,{estado:'entregado',entregadoAt:t,foto:!!s.foto,fotoId:s.foto?fotoId:'',tiempoMin:r?Math.round((Date.parse(t)-Date.parse(r.t))/60000):null},{t,tipo:'entrega',m:S.me||q.motorizado,salida:q.salida,obs:s.obs});}
+      closeSheet();render();toast((targets.length>1?targets.length+' pedidos entregados':esExtra(targets[0])?'Terminado':esRec(targets[0])?'Recogido':'Entregado')+' a las '+hLocal(t));
     });break}
     case 'verFoto':verFoto(p);break;
     case 'mapa':openSheet({k:'mapa',id});break;
+    case 'camara':if(S.sheet){S.sheet.obs=(document.getElementById('f-obs')||{}).value||S.sheet.obs||''}abrirCamara();break;
+    case 'camFoto':capturarCamara();break;
+    case 'camCerrar':cerrarCamara();break;
     case 'recojoAsk':openSheet({k:'recojo'});break;
+    case 'extraAsk':openSheet({k:'extra'});break;
+    case 'deshacerAsk':openSheet({k:'deshacer',id});break;
+    case 'deshacerGo':if(p){await deshacer(p);closeSheet();S.motoTab='ruta';render();toast('Listo: el pedido volvió a “En ruta”')}break;
+    case 'anularAsk':openSheet({k:'anular',id});break;
+    case 'anularGo':if(p&&esExtra(p)){S.db.doc('pedidos/'+p.id).delete().catch(e=>toast(errMsg(e)));S.pedidos.delete(p.id);if(S._A)S._A.delete(p.id);if(S._B)S._B.delete(p.id);closeSheet();render();toast('Encargo anulado')}break;
     case 'prio':if(p){S.db.doc('pedidos/'+p.id).update({prioridad:!p.prioridad}).catch(e=>toast(errMsg(e)));S.pedidos.set(p.id,{...p,prioridad:!p.prioridad});render();toast(p.prioridad?'Prioridad quitada':'Marcado como prioridad')}break;
     case 'limpiarFotos':limpiarFotos();break;
     case 'noEntAsk':openSheet({k:'no',id});break;
@@ -1195,13 +1300,14 @@ document.addEventListener('click',async ev=>{
     case 'motoDel':{const m=el.dataset.m;await guardarMotos(S.motos.filter(x=>x!==m));break}
   }
 });
-document.addEventListener('keydown',ev=>{if((ev.key===' '||ev.key==='Enter')&&ev.target.dataset&&ev.target.dataset.act==='toggle'){ev.preventDefault();ev.target.click()}if(ev.key==='Escape'&&S.sheet&&!S.busy)closeSheet()});
+document.addEventListener('keydown',ev=>{if((ev.key===' '||ev.key==='Enter')&&ev.target.dataset&&ev.target.dataset.act==='toggle'){ev.preventDefault();ev.target.click()}if(ev.key==='Escape'&&_cam){cerrarCamara();return}if(ev.key==='Escape'&&S.sheet&&!S.busy)closeSheet()});
 document.addEventListener('input',ev=>{const a=ev.target.dataset&&ev.target.dataset.act;
+  if(ev.target.id==='f-obs'&&S.sheet&&S.sheet.k==='ent'){S.sheet.obs=ev.target.value;clearTimeout(S._pt);S._pt=setTimeout(guardarPendiente,400)}
   if(a==='pinIn'){const el=ev.target;el.value=el.value.replace(/\D/g,'').slice(-1);const i=+el.dataset.i;if(el.value&&i<3)document.getElementById('pin'+(i+1)).focus();if(el.value&&i===3)el.form.requestSubmit();return}if(a==='q'){S.q=ev.target.value;clearTimeout(S._qt);S._qt=setTimeout(render,180)}});
 document.addEventListener('change',async ev=>{
   const el=ev.target,a=el.dataset&&el.dataset.act;if(!a)return;const s=S.sheet;
   if(a==='foto'&&el.files&&el.files[0]){s.obs=(document.getElementById('f-obs')||{}).value||'';s.leyendo=true;renderSheet();
-    try{s.foto=await fotoChica(el.files[0]);s.preview=s.foto}catch(e){toast('No se pudo leer la foto. Intenta otra vez.')}
+    try{s.foto=await fotoChica(el.files[0]);s.preview=s.foto;guardarPendiente()}catch(e){toast('No se pudo leer la foto. Intenta otra vez.')}
     s.leyendo=false;renderSheet();return}
   if(a==='fecha'){S.fecha=el.value||hoy();ensureHist(diffDays(S.fecha,hoy())+1);render()}
   else if(a==='file'&&el.files[0])prepararImport(el.files[0]);
@@ -1225,6 +1331,19 @@ document.addEventListener('submit',async ev=>{
     const datos={prioridad:g('prio').checked,horaDesde:g('desde').value||'',horaHasta:g('hasta').value||'',nota:g('nota').value.trim()};
     if(datos.horaDesde&&datos.horaHasta&&datos.horaDesde>datos.horaHasta){toast('La hora “hasta” debe ser después de “desde”');return}
     S.pedidos.set(p.id,{...p,...datos});S.db.doc('pedidos/'+p.id).update(datos).catch(e=>toast(errMsg(e)));renderSheet();render();toast('Indicaciones guardadas');return}
+  if(f.dataset.form==='extra'){ev.preventDefault();const g=k=>document.getElementById('ex-'+k).value.trim();
+    const hecho=document.getElementById('ex-hecho').checked,d=hoy(),now=nowISO();
+    const aISO=hm=>new Date(`${d}T${hm}:00-05:00`).toISOString();
+    let ini=now,fin=null;
+    if(hecho){if(!g('ini')||!g('fin')){toast('Pon la hora en que empezaste y terminaste');return}ini=aISO(g('ini'));fin=aISO(g('fin'));
+      if(fin<=ini){toast('La hora de término debe ser después de la de inicio');return}if(fin>now){toast('La hora de término no puede ser futura');return}}
+    const n=siguienteSalida(S.me),id=idDe('EXT-'+Date.now().toString(36).toUpperCase());
+    const hist=[{t:ini,tipo:'carga'},{t:ini,tipo:'recojo',m:S.me,salida:n}];if(fin)hist.push({t:fin,tipo:'entrega',m:S.me,salida:n,obs:'Registrado después'});
+    const datos={id,tipo:'extra',canal:'Extra',order:'Extra',cliente:g('por')||'Encargo extra',receptor:'',telefono:'',direccion:g('dir'),complemento:'',referencia:'',distrito:g('dis'),ciudad:'Lima',
+      items:[{n:g('que'),q:1}],unidades:0,total:0,fechaPedido:d,fechaLimite:'',fechaCarga:d,fechaPlan:d,estado:fin?'entregado':'en_ruta',intentos:0,motorizado:S.me,salida:n,recogidoAt:ini,entregadoAt:fin||'',motivo:'',foto:false,
+      historial:hist,cargadoAt:now,actualizado:now};
+    S.db.doc('pedidos/'+id).set(datos).catch(e=>toast(errMsg(e)));S._B=new Map(S._B||[]);S._B.set(id,datos);mezclar();
+    closeSheet();S.motoTab=fin?'hechos':'ruta';render();toast(fin?'Encargo registrado: cuenta en tus horas':'Encargo iniciado: marca “Terminado” al acabar');return}
   if(f.dataset.form==='recojo'){ev.preventDefault();const g=k=>document.getElementById('rc-'+k).value.trim();
     const fec=g('fec')||hoy(),t=nowISO(),id=idDe('REC-'+Date.now().toString(36).toUpperCase());
     const datos={id,tipo:'recojo',canal:'Recojo',order:g('ped')||'Recojo',cliente:g('cli'),receptor:'',telefono:g('tel'),direccion:g('dir'),complemento:'',referencia:g('ref'),distrito:g('dis'),ciudad:'Lima',
@@ -1245,6 +1364,7 @@ async function guardarMotos(list){try{await S.db.doc('config/general').set({moto
 
 /* ---------- boot ---------- */
 render();
+function mezclarYRetomar(){mezclar();if(!S._retomado&&S.cfgLoaded&&S.me&&S.motos.includes(S.me))retomarPendiente()}
 function mezclar(){
   const m=new Map();for(const [k,v] of (S._B||[]))m.set(k,conDestino(v));for(const [k,v] of (S._A||[]))m.set(k,conDestino(v));
   S.pedidos=m;render();if(S.sheet&&S.sheet.k==='detalle')renderSheet();
@@ -1288,7 +1408,7 @@ async function boot(){
   db.doc('config/general').onSnapshot(snap=>{const d=snap.exists?snap.data():{};S.motos=d.motorizados||[];S.pinHash=d.pinHash||null;S.puntos=d.puntos||{};S.cfgLoaded=true;mezclar()},e=>{S.cfgLoaded=true;toast(errMsg(e))});
   // 1) pedidos que siguen abiertos (por recoger o en ruta), sin importar la fecha
   db.collection('pedidos').where('estado','in',['pendiente','en_ruta']).onSnapshot(snap=>{
-    S._A=new Map(snap.docs.map(d=>[d.id,{...d.data(),id:d.id}]));mezclar();
+    S._A=new Map(snap.docs.map(d=>[d.id,{...d.data(),id:d.id}]));mezclarYRetomar();
   },e=>{S.online=false;render();toast(errMsg(e))});
   // 2) historial reciente (lo que se movió en los últimos días); se amplía al pedir fechas más antiguas
   suscribirHist();
