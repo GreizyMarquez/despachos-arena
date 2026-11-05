@@ -357,17 +357,28 @@ function ultimoRecojoAntes(p,t){let r=null;for(const e of p.historial||[])if(e.t
 function minutosEntrega(p,e){const r=ultimoRecojoAntes(p,e.t);return r?(Date.parse(e.t)-Date.parse(r.t))/60000:null}
 function siguienteSalida(m){const d=hoy();let mx=0;for(const {e} of eventosDe(d))if(e.tipo==='recojo'&&e.m===m)mx=Math.max(mx,e.salida||0);return mx+1}
 
+function inicioJornada(D,m){let aj=null,ini=null;for(const a of (S.avisos[D]||[])){if(a.m!==m)continue;if(a.tipo==='ajuste'){if(!aj||(a.creado||'')>(aj.creado||''))aj=a}else if(a.tipo==='inicio'){if(!ini||a.t<ini.t)ini=a}}return {aj,ini}}
+const FUENTE_INI={recojo:'',entrega:'1ª entrega (pedidos de días anteriores)',inicio:'Inició jornada',ajuste:'Ajustado por oficina'};
 function resumenDia(D){
   const ev=eventosDe(D),porMoto={},llevados=[],entregas=[],noEnt=[];
   for(const x of ev){
     if(!['recojo','entrega','no_entrega'].includes(x.e.tipo))continue;
     const m=x.e.m||'Sin nombre';
-    const pm=porMoto[m]||(porMoto[m]={m,ini:null,fin:null,salidas:new Set(),llevados:0,entregados:0,noEnt:0});
+    const pm=porMoto[m]||(porMoto[m]={m,ini:null,fin:null,primer:null,salidas:new Set(),llevados:0,entregados:0,noEnt:0});
+    if(!pm.primer||x.e.t<pm.primer)pm.primer=x.e.t;
     if(x.e.tipo==='recojo'){llevados.push(x);pm.llevados++;pm.salidas.add(x.e.salida||1);if(!pm.ini||x.e.t<pm.ini)pm.ini=x.e.t}
     else if(x.e.tipo==='entrega'){entregas.push(x);pm.entregados++;if(!pm.fin||x.e.t>pm.fin)pm.fin=x.e.t}
     else if(x.e.tipo==='no_entrega'){noEnt.push(x);pm.noEnt++;if(!pm.fin||x.e.t>pm.fin)pm.fin=x.e.t}
   }
-  for(const pm of Object.values(porMoto))pm.min=(pm.ini&&pm.fin&&pm.fin>pm.ini)?(Date.parse(pm.fin)-Date.parse(pm.ini))/60000:null;
+  for(const pm of Object.values(porMoto)){
+    const {aj,ini}=inicioJornada(D,pm.m);
+    let t=pm.ini,f='recojo';
+    if(pm.primer&&(!t||pm.primer<t)){t=pm.primer;f='entrega'}
+    if(ini&&(!t||ini.t<t)){t=ini.t;f='inicio'}
+    if(aj){t=aj.t;f='ajuste'}
+    pm.ini=t;pm.fuenteIni=f;
+    pm.min=(pm.ini&&pm.fin&&pm.fin>pm.ini)?(Date.parse(pm.fin)-Date.parse(pm.ini))/60000:null;
+  }
   const sal={};
   for(const x of ev){
     if(!['recojo','entrega','no_entrega'].includes(x.e.tipo))continue;
@@ -518,6 +529,8 @@ function vMoto(){
   return `<div class="row spread"><div><div class="eyebrow">${esc(fechaLarga(d))}</div><h1>Hola, ${esc(S.me.split(' ')[0])}</h1></div><div class="row" style="gap:6px"><button class="btn sm" data-act="extraAsk" ${S.readOnly?'disabled':''}>+ Encargo extra</button><button class="btn ghost sm" data-act="cambiarMoto">Cambiar</button></div></div>
   ${(()=>{const np=[...rec,...mios].filter(p=>p.prioridad).length;return np?`<div class="note bad"><b>★ ${np} pedido${np!==1?'s':''} con prioridad.</b> Llévalo${np!==1?'s':''} y entrégalo${np!==1?'s':''} primero.</div>`:''})()}
   ${mios.some(p=>p.fechaLimite&&p.fechaLimite<=d)?`<div class="note bad">Tienes ${mios.filter(p=>p.fechaLimite&&p.fechaLimite<=d).length} pedido(s) en ruta que vencen hoy o ya vencieron. Entrégalos primero.</div>`:''}
+  ${(()=>{const arr=mios.filter(p=>p.recogidoAt&&dLocal(p.recogidoAt)<d);if(!arr.length||jornadaHoy(S.me))return'';
+    return `<div class="note"><b>Tienes ${arr.length} pedido${arr.length!==1?'s':''} en ruta de días anteriores.</b> Cuando empieces a repartir hoy toca “Iniciar jornada” para que tus horas cuenten desde ahí.<div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn primary sm" data-act="iniJornada" ${S.readOnly?'disabled':''}>Iniciar jornada</button></div></div>`})()}
   ${S.readOnly?'<div class="note bad">Solo puedes ver los pedidos. Para marcar recojos y entregas, la oficina debe invitarte por correo como Editor.</div>':''}
   <div class="tabs" role="tablist">
     <button role="tab" aria-selected="${tab==='recoger'}" data-act="motoTab" data-t="recoger">Por recoger <span class="count">${rec.length}</span></button>
@@ -526,18 +539,21 @@ function vMoto(){
     <button role="tab" aria-selected="${tab==='horas'}" data-act="motoTab" data-t="horas">Mis horas</button>
   </div>${body}`;
 }
+function jornadaHoy(m){const d=hoy();return eventosDe(d).some(x=>x.e.m===m&&['recojo','entrega','no_entrega'].includes(x.e.tipo))||(S.avisos[d]||[]).some(a=>a.m===m&&(a.tipo==='inicio'||a.tipo==='ajuste'))}
 function finSemanaActual(){let d=hoy();while(diaSem(d)!==4)d=addDays(d,1);return d}
 function vMisHoras(){
   if(!S.miSemFin)S.miSemFin=finSemanaActual();
   const W=datosSemana(S.miSemFin),pm=W.motos.find(x=>x.m===S.me);
   const d=hoy(),hoyR=resumenDia(d).porMoto[S.me];
   let hoyHtml;
-  if(!hoyR)hoyHtml=`<div class="kpi"><span class="l">Hoy</span><span class="v num">0:00</span><span class="l">Tu jornada empieza con tu primer recojo.</span></div>`;
+  const iniSolo=!hoyR&&inicioJornada(d,S.me);const t0=iniSolo&&((iniSolo.aj||iniSolo.ini)||{}).t;
+  if(!hoyR&&t0)hoyHtml=`<div class="kpi t-route"><span class="l">Hoy · en curso</span><span class="v num">${hmm((Date.now()-Date.parse(t0))/60000)||'0:00'}</span><span class="l">Desde ${hLocal(t0)} hasta ahora</span></div>`;
+  else if(!hoyR)hoyHtml=`<div class="kpi"><span class="l">Hoy</span><span class="v num">0:00</span><span class="l">Tu jornada empieza con tu primer recojo o tu primera entrega.</span></div>`;
   else{
     const enCurso=enRuta(S.me).length>0;
     const finT=enCurso?nowISO():hoyR.fin;
     const min=finT&&finT>hoyR.ini?(Date.parse(finT)-Date.parse(hoyR.ini))/60000:0;
-    hoyHtml=`<div class="kpi t-route"><span class="l">Hoy${enCurso?' · en curso':''}</span><span class="v num">${hmm(min)||'0:00'}</span><span class="l">Desde ${hLocal(hoyR.ini)}${enCurso?' hasta ahora':hoyR.fin?' hasta '+hLocal(hoyR.fin):''} · ${hoyR.entregados} entrega${hoyR.entregados!==1?'s':''}</span></div>`;
+    hoyHtml=`<div class="kpi t-route"><span class="l">Hoy${enCurso?' · en curso':''}</span><span class="v num">${hmm(min)||'0:00'}</span><span class="l">Desde ${hLocal(hoyR.ini)}${enCurso?' hasta ahora':hoyR.fin?' hasta '+hLocal(hoyR.fin):''} · ${hoyR.entregados} entrega${hoyR.entregados!==1?'s':''}${FUENTE_INI[hoyR.fuenteIni]?' · '+FUENTE_INI[hoyR.fuenteIni].toLowerCase():''}</span></div>`;
   }
   const filas=W.dias.map(D=>{const x=pm&&pm.dias[D];return `<tr><td><b>${DIAS[diaSem(D)].slice(0,3)}</b> <span class="muted">${fechaCorta(D).slice(0,5)}</span></td>${x?`<td class="t">${hLocal(x.ini)}</td><td class="t">${x.fin?hLocal(x.fin):(D===d&&enRuta(S.me).length?'en curso':'—')}</td><td class="t"><b>${x.min!=null?hmm(x.min):(D===d&&enRuta(S.me).length?'…':'—')}</b></td><td class="t">${x.entregados}</td>`:`<td colspan="4" class="muted">${D>d?'—':'Sin recorrido'}</td>`}</tr>`}).join('');
   return `<div class="kpis">${hoyHtml}<div class="kpi"><span class="l">Semana (vie a jue)</span><span class="v num">${pm?hmm(pm.total)||'0:00':'0:00'}</span><span class="l">${pm?(pm.total/60).toFixed(2)+' h · '+pm.entregas+' entregas':'Sin horas aún'}</span></div></div>
@@ -638,7 +654,7 @@ function vDia(){
   const salidasTbl=R.salidas.length?`<div class="tbl-wrap"><table><thead><tr><th>Motorizado</th><th>Salida</th><th>Hora de recojo</th><th>Pedidos</th><th>Entregados</th><th>No entregados</th><th>Última entrega</th><th>Duración</th></tr></thead><tbody>
     ${R.salidas.map(o=>`<tr><td><b>${esc(o.m)}</b></td><td class="t">${o.n}</td><td class="t">${hLocal(o.ini)}</td><td class="t">${o.pedidos}</td><td class="t">${o.entregados}</td><td class="t">${o.noEnt}</td><td class="t">${o.fin?hLocal(o.fin):'—'}</td><td class="t">${o.min!=null?hmm(o.min):'—'}</td></tr>`).join('')}</tbody></table></div>`:'';
   const av=(S.avisos[D]||[]).slice().sort((a,b)=>a.t<b.t?1:-1);
-  const avisosHtml=av.length?`<div class="panel" style="gap:8px"><h3>Avisos del motorizado</h3>${av.map(a=>`<div class="row" style="gap:8px;align-items:flex-start"><span class="mono" style="font-size:12.5px;min-width:44px">${hLocal(a.t)}</span><span class="grow"><b>${esc(a.m)}</b> · ${esc(a.respuesta)}${a.detalle?' · '+esc(a.detalle):''}<br><span class="muted" style="font-size:12.5px">${a.pendientes||0} pedido(s) en ruta · ${durTxt(a.inactivo)} sin marcar</span></span></div>`).join('')}</div>`:'';
+  const avisosHtml=av.length?`<div class="panel" style="gap:8px"><h3>Avisos del motorizado</h3>${av.map(a=>`<div class="row" style="gap:8px;align-items:flex-start"><span class="mono" style="font-size:12.5px;min-width:44px">${hLocal(a.t)}</span><span class="grow"><b>${esc(a.m)}</b> · ${esc(a.respuesta)}${a.detalle?' · '+esc(a.detalle):''}${a.tipo?'':`<br><span class="muted" style="font-size:12.5px">${a.pendientes||0} pedido(s) en ruta · ${durTxt(a.inactivo)} sin marcar</span>`}</span></div>`).join('')}</div>`:'';
   return `<div class="row">
       <label class="fld" style="min-width:170px"><span>Fecha</span><input id="f-fecha" class="input" type="date" value="${D}" max="${hoy()}" data-act="fecha"></label>
       <div class="grow"></div>
@@ -731,7 +747,7 @@ function vDash(){
   const B=[['Menos de 1 h',0,60,'ok'],['1 a 2 h',60,120,'ok'],['2 a 3 h',120,180,''],['3 a 4 h',180,240,'warn'],['Más de 4 h',240,1e9,'bad']];
   const bucket=B.map(([l,a,b,c])=>({l,c,n:mins.filter(m=>m>=a&&m<b).length}));
   const dd=[['Mismo día de carga',x=>x.dd<=0,'ok'],['Al día siguiente',x=>x.dd===1,''],['2 días después',x=>x.dd===2,'warn'],['3 días o más',x=>x.dd>=3,'bad']].map(([l,f,c])=>({l,c,n:ent.filter(f).length}));
-  const jl=Object.values(jornadas).filter(j=>j.ini&&j.fin&&j.fin>j.ini).map(j=>(Date.parse(j.fin)-Date.parse(j.ini))/60000);
+  const jl=[];for(let i=0;i<S.rango;i++){const R=resumenDia(addDays(fin,-i));for(const m of Object.values(R.porMoto))if(m.min!=null)jl.push(m.min)}
   const bars=(arr,tot)=>`<div class="bars">${arr.map(x=>`<div class="bar-row"><span>${esc(x.l)}</span><div class="bar-track"><div class="bar-fill ${x.c||''}" style="width:${pct(x.n,tot)}%"></div></div><span class="pct">${pct(x.n,tot)}%</span></div>`).join('')}</div>`;
   const diasArr=[];for(let i=S.rango-1;i>=0;i--){const d=addDays(fin,-i);diasArr.push([d,dias[d]||0])}
   const mx=Math.max(1,...diasArr.map(x=>x[1]));
@@ -863,6 +879,13 @@ function renderSheet(){
       <button class="btn" data-act="close">Cerrar</button>`;
   }else if(s.k==='import'){h=sheetImport(s)}
   else if(s.k==='aviso'){h=sheetAviso(s)}
+  else if(s.k==='ajIni'){h=`<div><div class="eyebrow">${esc(s.m)} · ${esc(DIAS[diaSem(s.D)])} ${fechaCorta(s.D)}</div><h2>Ajustar hora de inicio</h2></div>
+    <p class="muted" style="margin:0;font-size:14px">Ahora figura desde las <b>${hLocal(s.ini)||'—'}</b>${s.fin?' hasta las <b>'+hLocal(s.fin)+'</b>':''}. Pon la hora real en que empezó a trabajar ese día.</p>
+    <form class="list" data-form="ajIni" style="gap:10px">
+      <label class="fld"><span>Hora de inicio</span><input id="aj-h" class="input" type="time" required value="${s.ini?hLocal(s.ini):''}"></label>
+      <label class="fld"><span>Motivo (opcional)</span><input id="aj-n" class="input" maxlength="120" placeholder="Ej.: empezó a las 8 con pedidos de ayer"></label>
+      <div class="acts2"><button class="btn" type="button" data-act="close">Cancelar</button><button class="btn primary" type="submit">Guardar</button></div>
+    </form>`}
   else if(s.k==='deshacer'&&p){const e=ultimoEvento(p);const ent=e&&e.tipo==='entrega';
     h=`<div><div class="eyebrow">${canalTag(p)} ${esc(p.order)}</div><h2>¿Deshacer ${ent?(esExtra(p)?'“terminado”':esRec(p)?'el recojo':'la entrega'):'el “no entregado”'}?</h2></div>
     <p style="margin:0">${esc(esExtra(p)?((p.items||[])[0]||{}).n:(p.receptor||p.cliente))} · marcado a las ${hLocal(e&&e.t)}</p>
@@ -1070,7 +1093,7 @@ async function descargarExcel(){
   let r=4;ws.getCell('A'+r).value='TOTALES DEL DÍA';ws.getCell('A'+r).font={bold:true,name:'Arial',color:{argb:AZUL}};r++;
   for(const [l,v] of tot){ws.getCell('A'+r).value=l;ws.getCell('B'+r).value=v;ws.getCell('A'+r).font={name:'Arial',size:10};ws.getCell('B'+r).font={bold:true,name:'Arial',size:11};ws.getCell('B'+r).alignment={horizontal:'right'};r++}
   r++;ws.getCell('A'+r).value='JORNADA POR MOTORIZADO';ws.getCell('A'+r).font={bold:true,name:'Arial',color:{argb:AZUL}};r++;
-  const hdr=['Motorizado','Salidas','Primer recojo','Última entrega','Horas en ruta (h:mm)','Llevados','Entregados','No entregados','Efectividad'];
+  const hdr=['Motorizado','Salidas','Inicio jornada','Última entrega','Horas en ruta (h:mm)','Llevados','Entregados','No entregados','Efectividad'];
   hdr.forEach((h,i)=>{const c=ws.getRow(r).getCell(i+1);c.value=h;c.font={bold:true,color:{argb:'FFFFFFFF'},name:'Arial',size:10};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NEGRO}};c.alignment={wrapText:true,vertical:'middle'}});ws.getRow(r).height=28;r++;
   for(const m of motos){ws.getRow(r).values=[m.m,m.salidas.size,hLocal(m.ini),hLocal(m.fin),m.min!=null?hmm(m.min):'',m.llevados,m.entregados,m.noEnt,(m.entregados+m.noEnt)?Math.round(m.entregados/(m.entregados+m.noEnt)*100)/100:''];ws.getRow(r).getCell(9).numFmt='0%';ws.getRow(r).font={name:'Arial',size:10};r++}
   if(!motos.length){ws.getCell('A'+r).value='Sin recojos registrados este día';ws.getCell('A'+r).font={italic:true,name:'Arial',size:10,color:{argb:'FF596372'}};r++}
@@ -1078,7 +1101,7 @@ async function descargarExcel(){
   ['Motorizado','Salida','Hora de recojo','Última entrega','Duración (h:mm)','Pedidos','Entregados','No entregados'].forEach((h,i)=>{const c=ws.getRow(r).getCell(i+1);c.value=h;c.font={bold:true,color:{argb:'FFFFFFFF'},name:'Arial',size:10};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NEGRO}};c.alignment={wrapText:true,vertical:'middle'}});ws.getRow(r).height=28;r++;
   for(const o of R.salidas){ws.getRow(r).values=[o.m,o.n,hLocal(o.ini),o.fin?hLocal(o.fin):'',o.min!=null?hmm(o.min):'',o.pedidos,o.entregados,o.noEnt];ws.getRow(r).font={name:'Arial',size:10};r++}
   if(!R.salidas.length){ws.getCell('A'+r).value='Sin salidas este día';ws.getCell('A'+r).font={italic:true,name:'Arial',size:10,color:{argb:'FF596372'}};r++}
-  r++;ws.getCell('A'+r).value='Horas en ruta = desde el primer recojo hasta la última entrega o intento del día.';ws.getCell('A'+r).font={italic:true,size:9,name:'Arial',color:{argb:'FF596372'}};
+  r++;ws.getCell('A'+r).value='Horas en ruta = desde que empieza a repartir (primer recojo, primera entrega de pedidos de días anteriores o “Iniciar jornada”) hasta la última entrega o intento del día.';ws.getCell('A'+r).font={italic:true,size:9,name:'Arial',color:{argb:'FF596372'}};
   // Llevados
   const w2=wb.addWorksheet('Llevados');
   head(w2,[['Salida',8],['Motorizado',18],['Hora recojo',11],['Canal',11],['Pedido',20],['Cliente / recibe',26],['Distrito',18],['Dirección',36],['Teléfono',14],['Unid.',7],['Resultado del día',18],['Hora entrega',11],['Tiempo (min)',11]]);
@@ -1158,7 +1181,7 @@ function datosSemana(fin){
     const R=resumenDia(D);
     for(const m of Object.values(R.porMoto)){
       const pm=porMoto[m.m]||(porMoto[m.m]={m:m.m,dias:{},total:0,entregas:0,salidas:0,incompletos:0});
-      pm.dias[D]={ini:m.ini,fin:m.fin,min:m.min,salidas:m.salidas.size,entregados:m.entregados,noEnt:m.noEnt,detalle:R.salidas.filter(o=>o.m===m.m)};
+      pm.dias[D]={ini:m.ini,fuente:m.fuenteIni,fin:m.fin,min:m.min,salidas:m.salidas.size,entregados:m.entregados,noEnt:m.noEnt,detalle:R.salidas.filter(o=>o.m===m.m)};
       if(m.min!=null)pm.total+=m.min;else pm.incompletos++;
       pm.entregas+=m.entregados;pm.salidas+=m.salidas.size;
     }
@@ -1172,14 +1195,14 @@ function vHoras(){
       <div style="text-align:center;min-width:190px"><div class="eyebrow">Semana de pago</div><b>Vie ${fechaCorta(W.ini).slice(0,5)} – Jue ${fechaCorta(W.fin).slice(0,5)}</b></div>
       <button class="btn sm" data-act="sem" data-d="7" ${W.fin>=hoy()?'disabled':''} aria-label="Semana siguiente">›</button></div>
     <button class="btn dark" data-act="excelSemana" ${W.motos.length?'':'disabled'}>${IC.down}Descargar horas de la semana</button></div>`;
-  if(!W.motos.length)return cab+`<div class="empty"><h3>Sin recorridos en esta semana</h3><p>Las horas se calculan solas desde el primer recojo hasta la última entrega de cada día.</p></div>`;
+  if(!W.motos.length)return cab+`<div class="empty"><h3>Sin recorridos en esta semana</h3><p>Las horas se calculan solas desde que empieza a repartir hasta la última entrega de cada día.</p></div>`;
   return cab+W.motos.map(pm=>`<section class="panel">
     <div class="row spread"><h2>${esc(pm.m)}</h2><div style="text-align:right"><div class="kpi" style="border:0;padding:0;background:none"><span class="v num">${hmm(pm.total)}</span><span class="l">${(pm.total/60).toFixed(2)} h en la semana</span></div></div></div>
     ${pm.incompletos?`<div class="note">${pm.incompletos} día(s) sin entrega marcada después del recojo: esas horas no se pueden calcular. Revisa ese día en la pestaña Día.</div>`:''}
-    <div class="tbl-wrap"><table><thead><tr><th>Día</th><th>Primer recojo</th><th>Última entrega</th><th>Horas</th><th>Salidas (hora de recojo)</th><th>Entregas</th></tr></thead><tbody>
-    ${W.dias.map(D=>{const x=pm.dias[D];return `<tr><td><b>${DIAS[diaSem(D)]}</b> <span class="muted">${fechaCorta(D).slice(0,5)}</span></td>${x?`<td class="t">${hLocal(x.ini)}</td><td class="t">${x.fin?hLocal(x.fin):'—'}</td><td class="t"><b>${x.min!=null?hmm(x.min):'—'}</b></td><td class="t">${x.detalle.map(o=>'S'+o.n+' '+hLocal(o.ini)).join(' · ')}</td><td class="t">${x.entregados}</td>`:`<td colspan="5" class="muted">${D>hoy()?'—':'Sin recorrido'}</td>`}</tr>`}).join('')}
-    <tr><td><b>Total</b></td><td></td><td></td><td class="t"><b>${hmm(pm.total)}</b></td><td class="t">${pm.salidas} salidas</td><td class="t"><b>${pm.entregas}</b></td></tr>
-    </tbody></table></div></section>`).join('')+`<p class="muted" style="margin:0;font-size:13px">Horas = desde el primer recojo hasta la última entrega o intento de cada día. Incluye los regresos a almacén entre salidas.</p>`;
+    <div class="tbl-wrap"><table><thead><tr><th>Día</th><th>Inicio</th><th>Última entrega</th><th>Horas</th><th>Salidas (hora de recojo)</th><th>Entregas</th><th></th></tr></thead><tbody>
+    ${W.dias.map(D=>{const x=pm.dias[D];return `<tr><td><b>${DIAS[diaSem(D)]}</b> <span class="muted">${fechaCorta(D).slice(0,5)}</span></td>${x?`<td class="t">${hLocal(x.ini)}${FUENTE_INI[x.fuente]?`<br><span class="muted" style="font-size:11.5px">${FUENTE_INI[x.fuente]}</span>`:''}</td><td class="t">${x.fin?hLocal(x.fin):'—'}</td><td class="t"><b>${x.min!=null?hmm(x.min):'—'}</b></td><td class="t">${x.detalle.map(o=>'S'+o.n+' '+hLocal(o.ini)).join(' · ')}</td><td class="t">${x.entregados}</td><td><button class="btn ghost sm" data-act="ajIniAsk" data-m="${esc(pm.m)}" data-d="${D}" ${S.readOnly?'disabled':''}>Ajustar inicio</button></td>`:`<td colspan="6" class="muted">${D>hoy()?'—':'Sin recorrido'}</td>`}</tr>`}).join('')}
+    <tr><td><b>Total</b></td><td></td><td></td><td class="t"><b>${hmm(pm.total)}</b></td><td class="t">${pm.salidas} salidas</td><td class="t"><b>${pm.entregas}</b></td><td></td></tr>
+    </tbody></table></div></section>`).join('')+`<p class="muted" style="margin:0;font-size:13px">Horas = desde que empieza (primer recojo del día, o su primera entrega si reparte pedidos que se llevó un día anterior, o la hora en que tocó “Iniciar jornada”) hasta la última entrega o intento. Si el inicio no es el real, usa “Ajustar inicio”.</p>`;
 }
 async function descargarSemana(){
   toast('Preparando Excel…');
@@ -1194,11 +1217,11 @@ async function descargarSemana(){
   let r=4;
   for(const pm of W.motos){
     ws.getCell('A'+r).value=pm.m.toUpperCase();ws.getCell('A'+r).font={bold:true,name:'Arial',size:12,color:{argb:AZUL}};r++;
-    ['Día','Fecha','Primer recojo','Última entrega','Horas (h:mm)','Horas (decimal)','Salidas (hora de recojo)','Entregas'].forEach((h,i)=>{const c=ws.getRow(r).getCell(i+1);c.value=h;c.font={bold:true,color:{argb:'FFFFFFFF'},name:'Arial',size:10};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NEGRO}};c.alignment={wrapText:true,vertical:'middle'}});ws.getRow(r).height=28;
+    ['Día','Fecha','Inicio jornada','Última entrega','Horas (h:mm)','Horas (decimal)','Salidas (hora de recojo)','Entregas'].forEach((h,i)=>{const c=ws.getRow(r).getCell(i+1);c.value=h;c.font={bold:true,color:{argb:'FFFFFFFF'},name:'Arial',size:10};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NEGRO}};c.alignment={wrapText:true,vertical:'middle'}});ws.getRow(r).height=28;
     const r0=r+1;r++;
     for(const D of W.dias){
       const x=pm.dias[D],row=ws.getRow(r);
-      row.values=[DIAS[diaSem(D)],fechaCorta(D),x?hLocal(x.ini):'',x&&x.fin?hLocal(x.fin):'',x&&x.min!=null?x.min/1440:null,null,x?x.detalle.map(o=>'Salida '+o.n+': '+hLocal(o.ini)).join(' · '):'',x?x.entregados:null];
+      row.values=[DIAS[diaSem(D)],fechaCorta(D),x?hLocal(x.ini):'',x&&x.fin?hLocal(x.fin):'',x&&x.min!=null?x.min/1440:null,null,x?[x.detalle.map(o=>'Salida '+o.n+': '+hLocal(o.ini)).join(' · '),FUENTE_INI[x.fuente]?'Inicio: '+FUENTE_INI[x.fuente].toLowerCase():''].filter(Boolean).join(' · '):'',x?x.entregados:null];
       row.getCell(5).numFmt='[h]:mm';row.getCell(6).value={formula:`IF(E${r}="","",ROUND(E${r}*24,2))`};row.getCell(6).numFmt='0.00';
       row.font={name:'Arial',size:10};if((r-r0)%2===1)row.eachCell({includeEmpty:true},c=>c.fill={type:'pattern',pattern:'solid',fgColor:{argb:GRIS}});
       r++;
@@ -1207,7 +1230,7 @@ async function descargarSemana(){
     t.font={bold:true,name:'Arial',size:11};t.eachCell({includeEmpty:true},c=>{c.border={top:{style:'thin',color:{argb:NEGRO}}}});
     r+=3;
   }
-  ws.getCell('A'+r).value='Horas = desde el primer recojo hasta la última entrega o intento de cada día (incluye regresos a almacén entre salidas).';ws.getCell('A'+r).font={italic:true,size:9,name:'Arial',color:{argb:'FF596372'}};
+  ws.getCell('A'+r).value='Horas = desde que empieza a repartir (primer recojo, o primera entrega de pedidos de días anteriores, o “Iniciar jornada”) hasta la última entrega o intento de cada día.';ws.getCell('A'+r).font={italic:true,size:9,name:'Arial',color:{argb:'FF596372'}};
   const buf=await wb.xlsx.writeBuffer();
   bajar(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`Horas_Motorizado_${W.ini}_a_${W.fin}.xlsx`);
 }
@@ -1302,6 +1325,11 @@ document.addEventListener('click',async ev=>{
     case 'rango':S.rango=+el.dataset.r;ensureHist(S.rango+1);render();break;
     case 'sem':S.semFin=addDays(S.semFin||semanaPorDefecto(),+el.dataset.d);ensureHist(diffDays(addDays(S.semFin,-7),hoy())+1);render();break;
     case 'excelSemana':descargarSemana();break;
+    case 'iniJornada':{const d=hoy(),t=nowISO();const a={m:S.me,t,tipo:'inicio',respuesta:'Inició la jornada (pedidos de días anteriores)',detalle:'',pendientes:enRuta(S.me).length,inactivo:0};
+      S.avisos[d]=[...(S.avisos[d]||[]),a];
+      S.db.doc('config/avisos-'+d).set({fecha:d,lista:firebase.firestore.FieldValue.arrayUnion(a)},{merge:true}).catch(e=>toast(errMsg(e)));
+      render();toast('Jornada iniciada a las '+hLocal(t));break}
+    case 'ajIniAsk':{const D=el.dataset.d,m=el.dataset.m,R=resumenDia(D).porMoto[m];openSheet({k:'ajIni',D,m,ini:R&&R.ini,fin:R&&R.fin});break}
     case 'resp':S.sheet.obs=(document.getElementById('f-obs')||{}).value||S.sheet.obs||'';S.sheet.resp=el.dataset.r;renderSheet();break;
     case 'respGo':{const s=S.sheet;const obs=((document.getElementById('f-obs')||{}).value||'').trim();
       if(s.resp==='Surgió un imprevisto'&&!obs){toast('Escribe qué pasó');break}
@@ -1347,6 +1375,15 @@ document.addEventListener('submit',async ev=>{
     const datos={prioridad:g('prio').checked,horaDesde:g('desde').value||'',horaHasta:g('hasta').value||'',nota:g('nota').value.trim()};
     if(datos.horaDesde&&datos.horaHasta&&datos.horaDesde>datos.horaHasta){toast('La hora “hasta” debe ser después de “desde”');return}
     S.pedidos.set(p.id,{...p,...datos});S.db.doc('pedidos/'+p.id).update(datos).catch(e=>toast(errMsg(e)));renderSheet();render();toast('Indicaciones guardadas');return}
+  if(f.dataset.form==='ajIni'){ev.preventDefault();const s=S.sheet;if(!s)return;
+    const hm=document.getElementById('aj-h').value,nota=document.getElementById('aj-n').value.trim();
+    if(!hm){toast('Pon la hora de inicio');return}
+    const t=new Date(`${s.D}T${hm}:00-05:00`).toISOString();
+    if(s.fin&&t>=s.fin){toast('El inicio debe ser antes de la última entrega ('+hLocal(s.fin)+')');return}
+    const a={m:s.m,t,tipo:'ajuste',respuesta:'Oficina ajustó el inicio a las '+hm,detalle:nota,creado:nowISO()};
+    S.avisos[s.D]=[...(S.avisos[s.D]||[]),a];
+    S.db.doc('config/avisos-'+s.D).set({fecha:s.D,lista:firebase.firestore.FieldValue.arrayUnion(a)},{merge:true}).catch(e=>toast(errMsg(e)));
+    closeSheet();render();toast('Inicio ajustado a las '+hm);return}
   if(f.dataset.form==='extra'){ev.preventDefault();const g=k=>document.getElementById('ex-'+k).value.trim();
     const hecho=document.getElementById('ex-hecho').checked,d=hoy(),now=nowISO();
     const aISO=hm=>new Date(`${d}T${hm}:00-05:00`).toISOString();
