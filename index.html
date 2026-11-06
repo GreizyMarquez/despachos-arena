@@ -357,6 +357,7 @@ function ultimoRecojoAntes(p,t){let r=null;for(const e of p.historial||[])if(e.t
 function minutosEntrega(p,e){const r=ultimoRecojoAntes(p,e.t);return r?(Date.parse(e.t)-Date.parse(r.t))/60000:null}
 function siguienteSalida(m){const d=hoy();let mx=0;for(const {e} of eventosDe(d))if(e.tipo==='recojo'&&e.m===m)mx=Math.max(mx,e.salida||0);return mx+1}
 
+function nombreDistrito(t){t=String(t||'').trim().replace(/\s+/g,' ').toLowerCase();if(!t)return'';return t.split(' ').map((w,i)=>i&&['de','del','y'].includes(w)?w:w.charAt(0).toUpperCase()+w.slice(1)).join(' ')}
 function inicioJornada(D,m){let aj=null,ini=null;for(const a of (S.avisos[D]||[])){if(a.m!==m)continue;if(a.tipo==='ajuste'){if(!aj||(a.creado||'')>(aj.creado||''))aj=a}else if(a.tipo==='inicio'){if(!ini||a.t<ini.t)ini=a}}return {aj,ini}}
 const FUENTE_INI={recojo:'',entrega:'1ª entrega (pedidos de días anteriores)',inicio:'Inició jornada',ajuste:'Ajustado por oficina'};
 function resumenDia(D){
@@ -364,7 +365,9 @@ function resumenDia(D){
   for(const x of ev){
     if(!['recojo','entrega','no_entrega'].includes(x.e.tipo))continue;
     const m=x.e.m||'Sin nombre';
-    const pm=porMoto[m]||(porMoto[m]={m,ini:null,fin:null,primer:null,salidas:new Set(),llevados:0,entregados:0,noEnt:0});
+    const pm=porMoto[m]||(porMoto[m]={m,ini:null,fin:null,primer:null,salidas:new Set(),llevados:0,entregados:0,noEnt:0,distritos:[],_dk:new Set(),lima:0,fal:0,rip:0,extras:0});
+    if(x.e.tipo!=='recojo'){const ds=nombreDistrito(x.p.distrito);const k=ds.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();if(ds&&!pm._dk.has(k)){pm._dk.add(k);pm.distritos.push(ds)}}
+    if(x.e.tipo==='entrega'){if(esExtra(x.p))pm.extras++;else if(x.p.canal==='Falabella')pm.fal++;else if(x.p.canal==='Ripley')pm.rip++;else pm.lima++}
     if(!pm.primer||x.e.t<pm.primer)pm.primer=x.e.t;
     if(x.e.tipo==='recojo'){llevados.push(x);pm.llevados++;pm.salidas.add(x.e.salida||1);if(!pm.ini||x.e.t<pm.ini)pm.ini=x.e.t}
     else if(x.e.tipo==='entrega'){entregas.push(x);pm.entregados++;if(!pm.fin||x.e.t>pm.fin)pm.fin=x.e.t}
@@ -1181,7 +1184,7 @@ function datosSemana(fin){
     const R=resumenDia(D);
     for(const m of Object.values(R.porMoto)){
       const pm=porMoto[m.m]||(porMoto[m.m]={m:m.m,dias:{},total:0,entregas:0,salidas:0,incompletos:0});
-      pm.dias[D]={ini:m.ini,fuente:m.fuenteIni,fin:m.fin,min:m.min,salidas:m.salidas.size,entregados:m.entregados,noEnt:m.noEnt,detalle:R.salidas.filter(o=>o.m===m.m)};
+      pm.dias[D]={ini:m.ini,fuente:m.fuenteIni,fin:m.fin,min:m.min,distritos:m.distritos,lima:m.lima,fal:m.fal,rip:m.rip,extras:m.extras,salidas:m.salidas.size,entregados:m.entregados,noEnt:m.noEnt,detalle:R.salidas.filter(o=>o.m===m.m)};
       if(m.min!=null)pm.total+=m.min;else pm.incompletos++;
       pm.entregas+=m.entregados;pm.salidas+=m.salidas.size;
     }
@@ -1199,40 +1202,65 @@ function vHoras(){
   return cab+W.motos.map(pm=>`<section class="panel">
     <div class="row spread"><h2>${esc(pm.m)}</h2><div style="text-align:right"><div class="kpi" style="border:0;padding:0;background:none"><span class="v num">${hmm(pm.total)}</span><span class="l">${(pm.total/60).toFixed(2)} h en la semana</span></div></div></div>
     ${pm.incompletos?`<div class="note">${pm.incompletos} día(s) sin entrega marcada después del recojo: esas horas no se pueden calcular. Revisa ese día en la pestaña Día.</div>`:''}
-    <div class="tbl-wrap"><table><thead><tr><th>Día</th><th>Inicio</th><th>Última entrega</th><th>Horas</th><th>Salidas (hora de recojo)</th><th>Entregas</th><th></th></tr></thead><tbody>
-    ${W.dias.map(D=>{const x=pm.dias[D];return `<tr><td><b>${DIAS[diaSem(D)]}</b> <span class="muted">${fechaCorta(D).slice(0,5)}</span></td>${x?`<td class="t">${hLocal(x.ini)}${FUENTE_INI[x.fuente]?`<br><span class="muted" style="font-size:11.5px">${FUENTE_INI[x.fuente]}</span>`:''}</td><td class="t">${x.fin?hLocal(x.fin):'—'}</td><td class="t"><b>${x.min!=null?hmm(x.min):'—'}</b></td><td class="t">${x.detalle.map(o=>'S'+o.n+' '+hLocal(o.ini)).join(' · ')}</td><td class="t">${x.entregados}</td><td><button class="btn ghost sm" data-act="ajIniAsk" data-m="${esc(pm.m)}" data-d="${D}" ${S.readOnly?'disabled':''}>Ajustar inicio</button></td>`:`<td colspan="6" class="muted">${D>hoy()?'—':'Sin recorrido'}</td>`}</tr>`}).join('')}
-    <tr><td><b>Total</b></td><td></td><td></td><td class="t"><b>${hmm(pm.total)}</b></td><td class="t">${pm.salidas} salidas</td><td class="t"><b>${pm.entregas}</b></td><td></td></tr>
+    <div class="tbl-wrap"><table><thead><tr><th>Día</th><th>Inicio</th><th>Última entrega</th><th>Horas</th><th>Distritos visitados</th><th>Salidas (hora de recojo)</th><th>Entregas</th><th></th></tr></thead><tbody>
+    ${W.dias.map(D=>{const x=pm.dias[D];return `<tr><td><b>${DIAS[diaSem(D)]}</b> <span class="muted">${fechaCorta(D).slice(0,5)}</span></td>${x?`<td class="t">${hLocal(x.ini)}${FUENTE_INI[x.fuente]?`<br><span class="muted" style="font-size:11.5px">${FUENTE_INI[x.fuente]}</span>`:''}</td><td class="t">${x.fin?hLocal(x.fin):'—'}</td><td class="t"><b>${x.min!=null?hmm(x.min):'—'}</b></td><td style="min-width:180px;font-size:13px">${esc(x.distritos.join(', '))||'—'}</td><td class="t">${x.detalle.map(o=>'S'+o.n+' '+hLocal(o.ini)).join(' · ')}</td><td class="t">${x.entregados}${x.fal||x.rip?`<br><span class="muted" style="font-size:11.5px">Lima ${x.lima} · Fal ${x.fal} · Rip ${x.rip}</span>`:''}</td><td><button class="btn ghost sm" data-act="ajIniAsk" data-m="${esc(pm.m)}" data-d="${D}" ${S.readOnly?'disabled':''}>Ajustar inicio</button></td>`:`<td colspan="7" class="muted">${D>hoy()?'—':'Sin recorrido'}</td>`}</tr>`}).join('')}
+    <tr><td><b>Total</b></td><td></td><td></td><td class="t"><b>${hmm(pm.total)}</b></td><td></td><td class="t">${pm.salidas} salidas</td><td class="t"><b>${pm.entregas}</b></td><td></td></tr>
     </tbody></table></div></section>`).join('')+`<p class="muted" style="margin:0;font-size:13px">Horas = desde que empieza (primer recojo del día, o su primera entrega si reparte pedidos que se llevó un día anterior, o la hora en que tocó “Iniciar jornada”) hasta la última entrega o intento. Si el inicio no es el real, usa “Ajustar inicio”.</p>`;
 }
 async function descargarSemana(){
   toast('Preparando Excel…');
   try{await needExcelJS()}catch(e){toast('No se pudo preparar el Excel. Revisa tu conexión.');return}
   const W=datosSemana(S.semFin||semanaPorDefecto());
+  const MES=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SETIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+  const fTit=D=>{const [y,m,d]=D.split('-');return d+' DE '+MES[+m-1]};
+  const hNum=t=>{if(!t)return null;const [h,m]=hLocal(t).split(':').map(Number);return (h*60+m)/1440};
   const wb=new ExcelJS.Workbook();wb.creator='Arena Perú';
-  const NEGRO='FF0B0C0E',AZUL='FF0050B5',GRIS='FFF1F3F6';
-  const ws=wb.addWorksheet('Horas semana',{views:[{showGridLines:false}]});
-  ws.columns=[{width:14},{width:12},{width:14},{width:15},{width:12},{width:12},{width:30},{width:11}];
-  ws.mergeCells('A1:H1');ws.getCell('A1').value='ARENA PERÚ · Horas del motorizado';ws.getCell('A1').font={bold:true,size:16,name:'Arial',color:{argb:'FFFFFFFF'}};ws.getCell('A1').fill={type:'pattern',pattern:'solid',fgColor:{argb:NEGRO}};ws.getRow(1).height=30;ws.getCell('A1').alignment={vertical:'middle',indent:1};
-  ws.mergeCells('A2:H2');ws.getCell('A2').value=`Semana del viernes ${fechaCorta(W.ini)} al jueves ${fechaCorta(W.fin)}`;ws.getCell('A2').font={size:11,name:'Arial',color:{argb:'FF596372'}};
-  let r=4;
+  const NEGRO='FF0B0C0E',GRIS='FFF1F3F6',F='Arial';
+  const ws=wb.addWorksheet('DESPACHOS ARENA',{views:[{showGridLines:false}],pageSetup:{orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,paperSize:9}});
+  ws.columns=[{width:3},{width:14},{width:13},{width:13},{width:16},{width:22},{width:58},{width:19},{width:12},{width:12},{width:14}];
+  const borde={top:{style:'thin'},left:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}};
+  const caja=(c,o={})=>{c.border=borde;c.alignment={horizontal:'center',vertical:'middle',wrapText:true,...(o.al||{})};c.font={name:F,size:o.sz||10,bold:!!o.b,color:{argb:o.fc||'FF0B0C0E'}};if(o.bg)c.fill={type:'pattern',pattern:'solid',fgColor:{argb:o.bg}}};
+  let r=2;
+  ws.mergeCells(`B${r}:K${r+1}`);const tc=ws.getCell('B'+r);tc.value=`DESPACHOS E-COMMERCE DEL ${fTit(W.ini)} AL ${fTit(W.fin)}`;caja(tc,{b:true,sz:14,fc:'FFFFFFFF',bg:NEGRO});
+  r+=3;
+  const filasTot=[];
   for(const pm of W.motos){
-    ws.getCell('A'+r).value=pm.m.toUpperCase();ws.getCell('A'+r).font={bold:true,name:'Arial',size:12,color:{argb:AZUL}};r++;
-    ['Día','Fecha','Inicio jornada','Última entrega','Horas (h:mm)','Horas (decimal)','Salidas (hora de recojo)','Entregas'].forEach((h,i)=>{const c=ws.getRow(r).getCell(i+1);c.value=h;c.font={bold:true,color:{argb:'FFFFFFFF'},name:'Arial',size:10};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:NEGRO}};c.alignment={wrapText:true,vertical:'middle'}});ws.getRow(r).height=28;
-    const r0=r+1;r++;
+    if(W.motos.length>1){ws.mergeCells(`B${r}:K${r}`);const c=ws.getCell('B'+r);c.value='MOTORIZADO: '+pm.m.toUpperCase();c.font={name:F,size:11,bold:true};r++}
+    ['FECHA','HORA INICIO','HORA FIN','TIEMPO TRABAJADO (HORAS)','ACTIVIDAD','DISTRITOS','LIMA METROPOLITANA','FALABELLA','RIPLEY','TOTAL ENTREGADOS'].forEach((h,k)=>{const c=ws.getRow(r).getCell(k+2);c.value=h;caja(c,{b:true,fc:'FFFFFFFF',bg:NEGRO})});
+    ws.getRow(r).height=32;r++;const r0=r;
     for(const D of W.dias){
-      const x=pm.dias[D],row=ws.getRow(r);
-      row.values=[DIAS[diaSem(D)],fechaCorta(D),x?hLocal(x.ini):'',x&&x.fin?hLocal(x.fin):'',x&&x.min!=null?x.min/1440:null,null,x?[x.detalle.map(o=>'Salida '+o.n+': '+hLocal(o.ini)).join(' · '),FUENTE_INI[x.fuente]?'Inicio: '+FUENTE_INI[x.fuente].toLowerCase():''].filter(Boolean).join(' · '):'',x?x.entregados:null];
-      row.getCell(5).numFmt='[h]:mm';row.getCell(6).value={formula:`IF(E${r}="","",ROUND(E${r}*24,2))`};row.getCell(6).numFmt='0.00';
-      row.font={name:'Arial',size:10};if((r-r0)%2===1)row.eachCell({includeEmpty:true},c=>c.fill={type:'pattern',pattern:'solid',fgColor:{argb:GRIS}});
+      const x=pm.dias[D];if(!x)continue;
+      const row=ws.getRow(r);
+      const [y,mo,d]=D.split('-').map(Number);
+      row.getCell(2).value=new Date(Date.UTC(y,mo-1,d));row.getCell(2).numFmt='dd/mm/yyyy';
+      row.getCell(3).value=hNum(x.ini);row.getCell(3).numFmt='hh:mm';
+      row.getCell(4).value=x.fin&&x.min!=null?hNum(x.fin):null;row.getCell(4).numFmt='hh:mm';
+      row.getCell(5).value={formula:`IF(OR(C${r}="",D${r}=""),"",D${r}-C${r})`};row.getCell(5).numFmt='[h]:mm';
+      row.getCell(6).value='Despachos E-commerce'+(x.extras?` + ${x.extras} encargo${x.extras!==1?'s':''} extra`:'');
+      row.getCell(7).value=x.distritos.join(', ')+(x.distritos.length?'.':'');
+      row.getCell(8).value=x.lima;row.getCell(9).value=x.fal;row.getCell(10).value=x.rip;
+      row.getCell(11).value={formula:`SUM(H${r}:J${r})`};
+      for(let k=2;k<=11;k++)caja(row.getCell(k),{al:k===7?{horizontal:'left'}:{},bg:(r-r0)%2?GRIS:null});
+      if(FUENTE_INI[x.fuente])row.getCell(3).note='Inicio: '+FUENTE_INI[x.fuente].toLowerCase();
+      if(x.min==null)row.getCell(4).note='Sin última entrega marcada: revisa este día en la app';
+      row.height=Math.max(30,15*Math.ceil((row.getCell(7).value.length||1)/60)+10);
       r++;
     }
-    const t=ws.getRow(r);t.getCell(1).value='TOTAL SEMANA';t.getCell(5).value={formula:`SUM(E${r0}:E${r-1})`};t.getCell(5).numFmt='[h]:mm';t.getCell(6).value={formula:`ROUND(E${r}*24,2)`};t.getCell(6).numFmt='0.00';t.getCell(8).value={formula:`SUM(H${r0}:H${r-1})`};
-    t.font={bold:true,name:'Arial',size:11};t.eachCell({includeEmpty:true},c=>{c.border={top:{style:'thin',color:{argb:NEGRO}}}});
-    r+=3;
+    const t=ws.getRow(r);
+    t.getCell(2).value='TOTAL';t.getCell(5).value={formula:`SUM(E${r0}:E${r-1})`};t.getCell(5).numFmt='[h]:mm';
+    for(const k of [8,9,10,11]){const L='ABCDEFGHIJK'[k-1];t.getCell(k).value={formula:`SUM(${L}${r0}:${L}${r-1})`}}
+    for(let k=2;k<=11;k++)caja(t.getCell(k),{b:true});
+    filasTot.push({m:pm.m,r});r+=3;
   }
-  ws.getCell('A'+r).value='Horas = desde que empieza a repartir (primer recojo, o primera entrega de pedidos de días anteriores, o “Iniciar jornada”) hasta la última entrega o intento de cada día.';ws.getCell('A'+r).font={italic:true,size:9,name:'Arial',color:{argb:'FF596372'}};
+  for(const f of filasTot){
+    ws.mergeCells(`B${r}:C${r}`);const g=ws.getCell('B'+r);g.value=W.motos.length>1?'GENERAL · '+f.m.toUpperCase():'GENERAL';caja(g,{b:true,fc:'FFFFFFFF',bg:NEGRO});ws.getCell('C'+r).border=borde;r++;
+    const a=ws.getCell('B'+r),b=ws.getCell('C'+r);a.value='TOTAL HORAS';b.value={formula:`E${f.r}`};b.numFmt='[h]:mm';caja(a,{b:true});caja(b,{b:true,sz:14});ws.getRow(r).height=22;r++;
+    const a2=ws.getCell('B'+r),b2=ws.getCell('C'+r);a2.value='EN DECIMAL';b2.value={formula:`ROUND(E${f.r}*24,2)`};b2.numFmt='0.00';caja(a2,{b:true});caja(b2,{b:true});r+=2;
+  }
+  ws.getCell('B'+r).value='Hora inicio = primer recojo del día o primera entrega (si reparte pedidos que se llevó un día anterior). Hora fin = última entrega o intento del día.';
+  ws.getCell('B'+r).font={italic:true,size:9,name:F,color:{argb:'FF596372'}};
   const buf=await wb.xlsx.writeBuffer();
-  bajar(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`Horas_Motorizado_${W.ini}_a_${W.fin}.xlsx`);
+  bajar(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),`DESPACHOS_E-COMMERCE_${W.ini}_AL_${W.fin}.xlsx`);
 }
 
 /* ---------- Aviso de inactividad ---------- */
