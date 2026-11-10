@@ -1092,7 +1092,7 @@ function rotuloHtml(p,logo){
   const dir=[p.direccion,p.complemento].filter(Boolean).join(' · ');
   const ciudad=[p.ciudad,p.depto].filter((x,i,a)=>x&&a.findIndex(y=>norm(y)===norm(x))===i).join(', ');
   return `<div class="rot">
-    <div class="rot-top">${logo}<div class="rot-ped"><small>Pedido</small><b>${esc(p.order)}</b>${p.boleta?`<small style="margin-top:1mm">Boleta</small><b>${esc(p.boleta)}</b>`:''}</div></div>
+    <div class="rot-top">${logo}<div class="rot-ped"><small>Pedido</small><b>${esc(p.order)}</b>${p.boleta?`<small style="margin-top:1mm">${/^\s*F/i.test(p.boleta)?'Factura':/^\s*B/i.test(p.boleta)?'Boleta':/^\s*POL/i.test(p.boleta)?'Pedido Siesa':'Comprobante'}</small><b>${esc(p.boleta)}</b>`:''}</div></div>
     <div><span class="rot-l">Entregar a</span><div class="rot-nom">${esc(nom)}</div>${otro?`<div class="rot-ref">Compró: ${esc(p.cliente)}</div>`:''}</div>
     <div class="rot-2"><div><span class="rot-l">DNI</span><b>${esc(p.dni||'—')}</b></div><div><span class="rot-l">Teléfono</span><b>${esc(telDisp(p.telefono)||'—')}</b></div></div>
     <div><span class="rot-l">Dirección</span><div class="rot-dir">${esc(dir||'—')}</div></div>
