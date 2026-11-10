@@ -211,6 +211,35 @@ td.t{white-space:nowrap;font-family:var(--f-mono);font-size:12.5px}
 @media (min-width:900px){.only-sm{display:none!important}}
 @media (max-width:899px){.only-lg{display:none!important}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* Rótulos de Lima: 4 por hoja A4, para recortar y pegar en el paquete */
+#print{display:none}
+@page{size:A4 portrait;margin:0}
+@media print{
+  html,body{background:#fff!important;padding:0!important;margin:0!important}
+  body>*:not(#print){display:none!important}
+  #print{display:block;color:#000;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+.rot-page{width:210mm;height:296mm;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;break-after:page;page-break-after:always;overflow:hidden}
+.rot-page:last-child{break-after:auto;page-break-after:auto}
+.rot{box-sizing:border-box;padding:9mm 8mm 7mm;display:flex;flex-direction:column;gap:2.2mm;overflow:hidden;min-width:0;min-height:0;font-family:"Archivo",Arial,sans-serif;font-size:10pt;line-height:1.25;color:#000}
+.rot:nth-child(odd){border-right:.3mm dashed #888}
+.rot:nth-child(-n+2){border-bottom:.3mm dashed #888}
+.rot-top{display:flex;align-items:center;justify-content:space-between;gap:4mm;border-bottom:.6mm solid #000;padding-bottom:2.2mm}
+.rot-top svg{height:11mm;width:auto;color:#000;flex:none}
+.rot-ped{text-align:right;min-width:0}
+.rot-ped small,.rot-l{display:block;font-size:6.5pt;letter-spacing:.09em;text-transform:uppercase;font-weight:700;color:#444}
+.rot-ped b{font-family:"IBM Plex Mono",monospace;font-size:10.5pt;font-weight:600;overflow-wrap:anywhere}
+.rot-nom{font-size:15pt;font-weight:800;line-height:1.1;text-transform:uppercase;overflow-wrap:anywhere}
+.rot-2{display:grid;grid-template-columns:1fr 1fr;gap:3mm}
+.rot-2 b{font-size:11.5pt;font-weight:700}
+.rot-dir{font-size:11.5pt;font-weight:600;overflow-wrap:anywhere}
+.rot-dis{display:inline-block;background:#000;color:#fff;font-weight:800;font-size:12.5pt;text-transform:uppercase;padding:.8mm 2.5mm;border-radius:1mm;letter-spacing:.02em}
+.rot-ref{font-size:9.5pt;overflow-wrap:anywhere}
+.rot-it{border-top:.3mm solid #000;padding-top:1.8mm;flex:1;min-height:0;overflow:hidden}
+.rot-it ul{list-style:none;margin:.6mm 0 0;padding:0;font-size:8.5pt;line-height:1.22}
+.rot-it li{display:grid;grid-template-columns:7mm 1fr}
+.rot-it li span{overflow-wrap:anywhere}
+.rot-pie{border-top:.3mm solid #000;padding-top:1.5mm;font-size:7pt;color:#333;display:flex;justify-content:space-between;gap:3mm}
 </style>
 </head>
 <body>
@@ -230,6 +259,7 @@ td.t{white-space:nowrap;font-family:var(--f-mono);font-size:12.5px}
 </main>
 <div id="bar"></div>
 <div id="sheet"></div>
+<div id="print" aria-hidden="true"></div>
 <div id="toast" hidden class="toast"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
@@ -273,7 +303,8 @@ const IC={
   cam:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>',
   down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg>',
-  truck:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M3 17V7h11v10M14 10h4l3 3v4h-2M9 17h6"/></svg>'
+  truck:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M3 17V7h11v10M14 10h4l3 3v4h-2M9 17h6"/></svg>',
+  print:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9V4h10v5M7 17H4v-7h16v7h-3M7 14h10v6H7z"/></svg>'
 };
 const MOTIVOS=['Cliente ausente','No contesta el teléfono','Dirección incorrecta o incompleta','Cliente pidió otra fecha','Zona de difícil acceso','Se acabó el tiempo de ruta','Otro'];
 
@@ -661,6 +692,7 @@ function vDia(){
   return `<div class="row">
       <label class="fld" style="min-width:170px"><span>Fecha</span><input id="f-fecha" class="input" type="date" value="${D}" max="${hoy()}" data-act="fecha"></label>
       <div class="grow"></div>
+      <button class="btn" data-act="rotAsk">${IC.print}Imprimir rótulos</button>
       <button class="btn dark" data-act="excel">${IC.down}Descargar Excel del día</button>
     </div>
     <div><div class="eyebrow">${esc(fechaLarga(D))}${esHoy?' · hoy':''}</div></div>
@@ -881,6 +913,7 @@ function renderSheet(){
       :`<div class="acts2">${p.estado!=='pendiente'?`<button class="btn" data-act="reabrir" data-id="${esc(p.id)}" ${S.readOnly?'disabled':''}>Volver a “Por recoger”</button>`:'<span></span>'}<button class="btn bad" data-act="delAsk" data-id="${esc(p.id)}" ${S.readOnly?'disabled':''}>Eliminar pedido</button></div>`}
       <button class="btn" data-act="close">Cerrar</button>`;
   }else if(s.k==='import'){h=sheetImport(s)}
+  else if(s.k==='rot'){h=sheetRotulos(s)}
   else if(s.k==='aviso'){h=sheetAviso(s)}
   else if(s.k==='ajIni'){h=`<div><div class="eyebrow">${esc(s.m)} · ${esc(DIAS[diaSem(s.D)])} ${fechaCorta(s.D)}</div><h2>Ajustar hora de inicio</h2></div>
     <p class="muted" style="margin:0;font-size:14px">Ahora figura desde las <b>${hLocal(s.ini)||'—'}</b>${s.fin?' hasta las <b>'+hLocal(s.fin)+'</b>':''}. Pon la hora real en que empezó a trabajar ese día.</p>
@@ -930,7 +963,7 @@ function renderSheet(){
     </div>
     <button class="btn" data-act="close">Cancelar</button>`}
   else if(s.k==='msg'){h=`<h2>${esc(s.title)}</h2><p style="margin:0">${esc(s.text)}</p><button class="btn" data-act="close">Entendido</button>`}
-  host.innerHTML=`<div class="scrim" data-act="scrim"><div class="sheet ${s.k==='import'||s.k==='verfoto'?'wide':''}" role="dialog" aria-modal="true">${h}</div></div>`;
+  host.innerHTML=`<div class="scrim" data-act="scrim"><div class="sheet ${s.k==='import'||s.k==='verfoto'||s.k==='rot'?'wide':''}" role="dialog" aria-modal="true">${h}</div></div>`;
 }
 
 /* ---------- import ---------- */
@@ -954,6 +987,7 @@ const ALIAS={
   ciudad:['city','ciudad','provincia'],
   depto:['uf','departamento','region'],
   referencia:['reference','referencia','ref'],
+  dni:['clientdocument','document','dni','documento','nrodocumento','numerodocumento','numerodedocumento','documentodeidentidad','docidentidad','dnicliente','dniruc','rucdni'],
   receptor:['receivername','receptor','recibe','destinatario','quienrecibe','nombrereceptor'],
   sku:['skuname','producto','articulo','item','productos','sku','codigo'],
   qty:['quantitysku','cantidad','qty','unidades','cant'],
@@ -965,6 +999,8 @@ const ALIAS={
   limite:['estimatedeliverydate','fechalimite','fechalimitedeentrega','fechaestimada','fechaestimadadeentrega','fechadeentrega','fechaentrega','entregarhasta']
 };
 function mapHeaders(hs){const m={};const nh=hs.map(norm);for(const [k,al] of Object.entries(ALIAS)){const i=nh.findIndex(h=>al.includes(h));if(i>=0)m[k]=hs[i]}return m}
+/* Excel suele quitar el cero inicial del DNI: se repone a 8 dígitos */
+function aDni(raw){const d=String(raw||'').trim().replace(/\.0+$/,'');return /^\d{5,7}$/.test(d)?d.padStart(8,'0'):d.slice(0,20)}
 function aFecha(raw){
   raw=String(raw||'').trim();if(!raw)return '';
   if(/^\d{4}-\d{2}-\d{2}$/.test(raw))return raw;
@@ -998,7 +1034,7 @@ async function leerArchivo(file){
     if(!x){
       const f=aFecha(v('fecha')),lim=aFecha(v('limite'));
       const dir=[v('street'),v('number')].filter(Boolean).join(' ');
-      x={order:o,cliente:[v('nombre'),v('apellido')].filter(Boolean).join(' '),receptor:v('receptor'),telefono:v('telefono'),direccion:dir,complemento:v('complemento'),referencia:v('referencia'),
+      x={order:o,cliente:[v('nombre'),v('apellido')].filter(Boolean).join(' '),receptor:v('receptor'),telefono:v('telefono'),direccion:dir,complemento:v('complemento'),referencia:v('referencia'),dni:aDni(v('dni')),
          distrito:v('distrito'),ciudad:v('ciudad'),depto:v('depto'),estadoOrigen:v('estado'),courier:v('courier'),fechaPedido:f,fechaLimite:lim,canal,prioridad:/^(si|sí|x|1|alta|urgente|true)$/i.test(v('prio')),items:[],unidades:0,total:0};
       g.set(key,x);
     }
@@ -1012,7 +1048,7 @@ function sheetImport(s){
   if(s.step==='pick')return `<div><div class="eyebrow">Paso 1 de 2</div><h2>Cargar pedidos del día</h2></div>
     <div class="photo-drop" style="min-height:150px"><div>${IC.up.replace('<svg','<svg style="width:34px;height:34px"')}<div style="font-weight:700;color:var(--ink);margin-top:6px">Elegir archivo Excel o CSV</div><div style="font-size:13px">La exportación de pedidos de VTEX funciona tal cual</div></div><input id="f-file" type="file" accept=".xlsx,.xls,.csv,.txt" data-act="file" aria-label="Archivo de pedidos"></div>
     ${s.error?`<div class="note bad">${esc(s.error)}</div>`:''}${s.loading?'<p class="muted" style="margin:0">Leyendo archivo…</p>':''}
-    <p class="muted" style="margin:0;font-size:13px">Sirve la exportación de VTEX o tu Excel de marketplaces (la columna MÉTODO DE PAGO dice si es Falabella o Ripley). Columnas VTEX que uso: Order, Client Name, Client Last Name, Phone, Receiver Name, Street, Number, Complement, Neighborhood, City, Reference, SKU Name, Quantity_SKU, Total Value, Creation Date, Estimate Delivery Date (fecha límite) y Status. Si usas tu propio formato, sirven nombres como Pedido, Cliente, Teléfono, Dirección, Distrito, Referencia.</p>
+    <p class="muted" style="margin:0;font-size:13px">Sirve la exportación de VTEX o tu Excel de marketplaces (la columna MÉTODO DE PAGO dice si es Falabella o Ripley). Columnas VTEX que uso: Order, Client Name, Client Last Name, Phone, Receiver Name, Street, Number, Complement, Neighborhood, City, Reference, Client Document (DNI), SKU Name, Quantity_SKU, Total Value, Creation Date, Estimate Delivery Date (fecha límite) y Status. Si usas tu propio formato, sirven nombres como Pedido, Cliente, Teléfono, Dirección, Distrito, Referencia.</p>
     <button class="btn" data-act="close">Cancelar</button>`;
   if(s.step==='saving')return `<h2>Guardando pedidos…</h2><div class="progress"><i style="width:${Math.round(s.done/s.total*100)}%"></i></div><p class="muted" style="margin:0">${s.done} de ${s.total}</p>`;
   const vis=visiblesImport(s);
@@ -1027,6 +1063,46 @@ function sheetImport(s){
     <div class="row spread"><span class="muted" style="font-size:13px">${vis.length} en el rango · ${vis.filter(x=>x.existe).length} ya estaban cargados</span><button class="btn ghost sm" data-act="impAll">Marcar / desmarcar todos</button></div>
     <div class="imp-list">${vis.length?vis.map(x=>`<label class="imp-row"><input type="checkbox" data-act="impSel" data-o="${esc(docId(x))}" ${x.existe?'disabled':''} ${s.sel.has(docId(x))&&!x.existe?'checked':''}><span>${x.canal&&x.canal!=='VTEX'?`<span class="canal c-${esc(x.canal)}">${esc(x.canal)}</span> `:''}<b>${esc(x.receptor||x.cliente)}</b> · <span class="muted">${esc(x.distrito)}</span><br><span class="ord">${esc(x.order)}</span> <span class="muted" style="font-size:12px">${fechaCorta(x.fechaPedido)} · ${x.unidades} und.${x.fechaLimite?' · límite '+fechaCorta(x.fechaLimite).slice(0,5):''}</span></span>${x.existe?'<span class="pill st-pendiente">Ya cargado</span>':(/cancel/i.test(x.estadoOrigen)?'<span class="pill st-noent">Cancelado</span>':'')}</label>`).join(''):'<div class="imp-row" style="grid-template-columns:1fr"><span class="muted">Ningún pedido en ese rango de fechas.</span></div>'}</div>
     <div class="acts2"><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="impGo" ${nSel?'':'disabled'}>Cargar ${nSel} pedido${nSel!==1?'s':''}</button></div>`;
+}
+/* ---------- Rótulos (pedidos de Lima que reparte el motorizado) ---------- */
+function candidatosRotulo(D){return pedidosDelDia(D).filter(p=>!p.tipo&&(!p.canal||p.canal==='VTEX')).sort(ordenRuta)}
+function sheetRotulos(s){
+  const c=candidatosRotulo(s.D),n=c.filter(x=>s.sel.has(x.id)).length,hojas=Math.ceil(n/4);
+  const sinDni=c.filter(x=>s.sel.has(x.id)&&!x.dni).length;
+  return `<div><div class="eyebrow">${esc(fechaLarga(s.D))}</div><h2>Imprimir rótulos de Lima</h2><p class="muted" style="margin:4px 0 0;font-size:13.5px">Salen 4 rótulos por hoja A4 para recortar y pegar en cada paquete. Vienen marcados los pedidos cargados ese día.</p></div>
+    <div class="row spread"><span class="muted" style="font-size:13px">${c.length} pedido${c.length!==1?'s':''} de Lima</span><button class="btn ghost sm" data-act="rotAll">Marcar / desmarcar todos</button></div>
+    <div class="imp-list">${c.map(x=>`<label class="imp-row"><input type="checkbox" data-act="impSel" data-o="${esc(x.id)}" ${s.sel.has(x.id)?'checked':''}><span><b>${esc(x.receptor||x.cliente)}</b> · <span class="muted">${esc(x.distrito)}</span><br><span class="ord">${esc(x.order)}</span> <span class="muted" style="font-size:12px">${x.unidades||0} und. · cargado ${fechaCorta(x.fechaCarga).slice(0,5)}</span></span><span class="pill ${estadoEnDia(x,s.D)[1]}">${estadoEnDia(x,s.D)[0]}</span></label>`).join('')}</div>
+    ${sinDni?`<div class="note">${sinDni} pedido${sinDni!==1?'s':''} marcado${sinDni!==1?'s':''} no tiene${sinDni!==1?'n':''} DNI guardado (se cargó antes de este cambio o el Excel no traía la columna). Si vuelves a cargar el Excel de VTEX, el DNI se completa solo.</div>`:''}
+    <div class="acts2"><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="rotGo" ${n?'':'disabled'}>${IC.print}Imprimir ${n} rótulo${n!==1?'s':''}${n?' · '+hojas+' hoja'+(hojas!==1?'s':''):''}</button></div>`;
+}
+function rotuloHtml(p,logo){
+  const nom=p.receptor||p.cliente||'';
+  const otro=p.receptor&&p.cliente&&norm(p.receptor)!==norm(p.cliente);
+  const its=p.items||[],MAX=7,ver=its.length>MAX?its.slice(0,MAX-1):its;
+  const dir=[p.direccion,p.complemento].filter(Boolean).join(' · ');
+  const ciudad=[p.ciudad,p.depto].filter((x,i,a)=>x&&a.findIndex(y=>norm(y)===norm(x))===i).join(', ');
+  return `<div class="rot">
+    <div class="rot-top">${logo}<div class="rot-ped"><small>Pedido</small><b>${esc(p.order)}</b></div></div>
+    <div><span class="rot-l">Entregar a</span><div class="rot-nom">${esc(nom)}</div>${otro?`<div class="rot-ref">Compró: ${esc(p.cliente)}</div>`:''}</div>
+    <div class="rot-2"><div><span class="rot-l">DNI</span><b>${esc(p.dni||'—')}</b></div><div><span class="rot-l">Teléfono</span><b>${esc(telDisp(p.telefono)||'—')}</b></div></div>
+    <div><span class="rot-l">Dirección</span><div class="rot-dir">${esc(dir||'—')}</div></div>
+    <div><span class="rot-dis">${esc(p.distrito||'Sin distrito')}</span>${ciudad?` <span class="rot-ref">${esc(ciudad)}</span>`:''}</div>
+    ${p.referencia?`<div class="rot-ref"><span class="rot-l">Referencia</span>${esc(p.referencia)}</div>`:''}
+    <div class="rot-it"><span class="rot-l">Contenido · ${p.unidades||0} unidad${(p.unidades||0)!==1?'es':''}</span><ul>${ver.map(i=>`<li><b>${i.q}×</b><span>${esc(i.n)}</span></li>`).join('')}${its.length>MAX?`<li><b>+</b><span>${its.length-ver.length} productos más (ver pedido)</span></li>`:''}</ul></div>
+    <div class="rot-pie"><span>Remite: Arena Perú · Supertex del Perú S.A.C.</span><span>www.arenaperu.com</span></div>
+  </div>`;
+}
+function imprimirRotulos(){
+  const s=S.sheet;if(!s||s.k!=='rot')return;
+  const ps=candidatosRotulo(s.D).filter(x=>s.sel.has(x.id));if(!ps.length)return;
+  const lg=document.querySelector('header .logo').cloneNode(true);lg.removeAttribute('class');const logo=lg.outerHTML;
+  let h='';for(let i=0;i<ps.length;i+=4)h+=`<div class="rot-page">${ps.slice(i,i+4).map(p=>rotuloHtml(p,logo)).join('')}</div>`;
+  const host=document.getElementById('print');host.innerHTML=h;
+  closeSheet();
+  const limpiar=()=>{host.innerHTML='';window.removeEventListener('afterprint',limpiar)};
+  window.addEventListener('afterprint',limpiar);
+  const ir=()=>setTimeout(()=>window.print(),80);
+  (document.fonts&&document.fonts.ready?document.fonts.ready.then(ir,ir):ir());
 }
 function visiblesImport(s){return s.rows.filter(x=>(!x.fechaPedido||(x.fechaPedido>=s.ini&&x.fechaPedido<=s.fin))&&!(s.omitirCancel&&/cancel/i.test(x.estadoOrigen)))}
 async function prepararImport(file){
@@ -1051,9 +1127,9 @@ async function guardarImport(){
     try{
       const ref=S.db.doc('pedidos/'+id);
       const ex=await ref.get();
-      if(ex.exists){dup++;if(x.fechaLimite&&!ex.data().fechaLimite)await ref.update({fechaLimite:x.fechaLimite})}else{
+      if(ex.exists){dup++;const fal={};if(x.fechaLimite&&!ex.data().fechaLimite)fal.fechaLimite=x.fechaLimite;if(x.dni&&!ex.data().dni)fal.dni=x.dni;if(Object.keys(fal).length)await ref.update(fal)}else{
         const t=nowISO();
-        await ref.set({id,order:x.order,canal:x.canal||'VTEX',cliente:x.cliente,receptor:mk?'':x.receptor,telefono:mk?'':x.telefono,telefonoCliente:x.telefono,direccion:mk?'':x.direccion,complemento:mk?'':x.complemento,referencia:mk?'':x.referencia,distrito:mk?'':x.distrito,ciudad:mk?'':x.ciudad,distritoCliente:x.distrito,ciudadCliente:x.ciudad,depto:x.depto,
+        await ref.set({id,order:x.order,canal:x.canal||'VTEX',cliente:x.cliente,receptor:mk?'':x.receptor,telefono:mk?'':x.telefono,telefonoCliente:x.telefono,direccion:mk?'':x.direccion,complemento:mk?'':x.complemento,referencia:mk?'':x.referencia,distrito:mk?'':x.distrito,ciudad:mk?'':x.ciudad,distritoCliente:x.distrito,ciudadCliente:x.ciudad,depto:x.depto,dni:mk?'':(x.dni||''),
           items:x.items.slice(0,30),unidades:x.unidades,total:x.total,fechaPedido:x.fechaPedido,fechaLimite:x.fechaLimite||'',courier:x.courier,
           fechaCarga:s.desp,fechaPlan:s.desp,prioridad:!!x.prioridad,estado:'pendiente',intentos:0,motorizado:'',salida:0,recogidoAt:'',entregadoAt:'',motivo:'',
           historial:[{t,tipo:'carga'}],cargadoAt:t,actualizado:t});
@@ -1366,6 +1442,10 @@ document.addEventListener('click',async ev=>{
       S.db.doc('config/avisos-'+d).set({fecha:d,lista:firebase.firestore.FieldValue.arrayUnion(a)},{merge:true}).catch(e=>toast(errMsg(e)));
       closeSheet();if(s.resp==='Terminé las entregas del día')S.motoTab='ruta';render();toast('Aviso enviado a la oficina');break}
     case 'excel':descargarExcel();break;
+    case 'rotAsk':{const c=candidatosRotulo(S.fecha);if(!c.length){toast('No hay pedidos de Lima para rotular en esta fecha');break}
+      const nuevos=c.filter(x=>x.fechaCarga===S.fecha);openSheet({k:'rot',D:S.fecha,sel:new Set((nuevos.length?nuevos:c).map(x=>x.id))});break}
+    case 'rotAll':{const s=S.sheet,c=candidatosRotulo(s.D);const all=c.every(x=>s.sel.has(x.id));c.forEach(x=>all?s.sel.delete(x.id):s.sel.add(x.id));renderSheet();break}
+    case 'rotGo':imprimirRotulos();break;
     case 'importAsk':openSheet({k:'import',step:'pick'});break;
     case 'impAll':{const s=S.sheet,vis=visiblesImport(s).filter(x=>!x.existe);const all=vis.every(x=>s.sel.has(docId(x)));vis.forEach(x=>all?s.sel.delete(docId(x)):s.sel.add(docId(x)));renderSheet();break}
     case 'impGo':guardarImport();break;
