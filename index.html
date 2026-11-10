@@ -237,9 +237,13 @@ td.t{white-space:nowrap;font-family:var(--f-mono);font-size:12.5px}
 .rot-ref{font-size:9.5pt;overflow-wrap:anywhere}
 .rot-it{border-top:.3mm solid #000;padding-top:1.8mm;flex:1;min-height:0;overflow:hidden}
 .rot-it ul{list-style:none;margin:.6mm 0 0;padding:0;font-size:8.5pt;line-height:1.22}
-.rot-it li{display:grid;grid-template-columns:7mm 1fr}
+.rot-it li{display:grid;grid-template-columns:7mm 1fr auto;column-gap:2mm}
+.rot-it li em{font-style:normal;font-weight:600;white-space:nowrap;text-align:right}
+.rot-tot{display:flex;justify-content:space-between;align-items:baseline;gap:3mm;border-top:.3mm solid #000;padding-top:1.5mm;font-size:9.5pt}
+.rot-tot b{font-size:12pt;font-weight:800}
 .rot-it li span{overflow-wrap:anywhere}
-.rot-pie{border-top:.3mm solid #000;padding-top:1.5mm;font-size:7pt;color:#333;display:flex;justify-content:space-between;gap:3mm}
+.rot-it ul.cmp li span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rot-pie{border-top:.3mm solid #888;padding-top:1.5mm;font-size:7pt;color:#333;display:flex;justify-content:space-between;gap:3mm}
 </style>
 </head>
 <body>
@@ -987,6 +991,10 @@ const ALIAS={
   ciudad:['city','ciudad','provincia'],
   depto:['uf','departamento','region'],
   referencia:['reference','referencia','ref'],
+  boleta:['invoicenumbers','invoicenumber','invoice','boleta','nboleta','nroboleta','nrodeboleta','numeroboleta','numerodeboleta','comprobante','nrocomprobante','numerodecomprobante','factura','nrofactura','numerodefactura','boletafactura','boletaofactura'],
+  punit:['skusellingprice','precio','preciounitario','preciounit','precioventa','preciodeventa'],
+  ptotal:['skutotalprice','preciototal','totalproducto','subtotalproducto'],
+  envio:['shippingvalue','envio','costodeenvio','costoenvio','flete'],
   dni:['clientdocument','document','dni','documento','nrodocumento','numerodocumento','numerodedocumento','documentodeidentidad','docidentidad','dnicliente','dniruc','rucdni'],
   receptor:['receivername','receptor','recibe','destinatario','quienrecibe','nombrereceptor'],
   sku:['skuname','producto','articulo','item','productos','sku','codigo'],
@@ -1000,6 +1008,7 @@ const ALIAS={
 };
 function mapHeaders(hs){const m={};const nh=hs.map(norm);for(const [k,al] of Object.entries(ALIAS)){const i=nh.findIndex(h=>al.includes(h));if(i>=0)m[k]=hs[i]}return m}
 /* Excel suele quitar el cero inicial del DNI: se repone a 8 dígitos */
+function aNum(raw){const n=parseFloat(String(raw??'').replace(/[^\d.,-]/g,'').replace(',','.'));return isNaN(n)?null:n}
 function aDni(raw){const d=String(raw||'').trim().replace(/\.0+$/,'');return /^\d{5,7}$/.test(d)?d.padStart(8,'0'):d.slice(0,20)}
 function aFecha(raw){
   raw=String(raw||'').trim();if(!raw)return '';
@@ -1034,12 +1043,12 @@ async function leerArchivo(file){
     if(!x){
       const f=aFecha(v('fecha')),lim=aFecha(v('limite'));
       const dir=[v('street'),v('number')].filter(Boolean).join(' ');
-      x={order:o,cliente:[v('nombre'),v('apellido')].filter(Boolean).join(' '),receptor:v('receptor'),telefono:v('telefono'),direccion:dir,complemento:v('complemento'),referencia:v('referencia'),dni:aDni(v('dni')),
+      x={order:o,cliente:[v('nombre'),v('apellido')].filter(Boolean).join(' '),receptor:v('receptor'),telefono:v('telefono'),direccion:dir,complemento:v('complemento'),referencia:v('referencia'),dni:aDni(v('dni')),boleta:v('boleta').slice(0,60),envio:aNum(v('envio'))||0,
          distrito:v('distrito'),ciudad:v('ciudad'),depto:v('depto'),estadoOrigen:v('estado'),courier:v('courier'),fechaPedido:f,fechaLimite:lim,canal,prioridad:/^(si|sí|x|1|alta|urgente|true)$/i.test(v('prio')),items:[],unidades:0,total:0};
       g.set(key,x);
     }
     const d0=v('desc'),q=parseInt(v('qty'))||1,n=(d0&&!/^#/.test(d0))?d0:v('sku');
-    if(n){x.items.push({n:n.slice(0,80),q});x.unidades+=q}else if(!x.items.length)x.unidades+=q;
+    if(n){const it={n:n.slice(0,80),q};const pt=aNum(v('ptotal')),pu=aNum(v('punit'));const pl=pt!=null?pt:(pu!=null?pu*q:null);if(pl!=null)it.p=Math.round(pl*100)/100;x.items.push(it);x.unidades+=q}else if(!x.items.length)x.unidades+=q;
     const t=parseFloat(String(v('total')).replace(',','.'));if(!isNaN(t))x.total=Math.max(x.total,t);
   }
   return [...g.values()];
@@ -1048,7 +1057,7 @@ function sheetImport(s){
   if(s.step==='pick')return `<div><div class="eyebrow">Paso 1 de 2</div><h2>Cargar pedidos del día</h2></div>
     <div class="photo-drop" style="min-height:150px"><div>${IC.up.replace('<svg','<svg style="width:34px;height:34px"')}<div style="font-weight:700;color:var(--ink);margin-top:6px">Elegir archivo Excel o CSV</div><div style="font-size:13px">La exportación de pedidos de VTEX funciona tal cual</div></div><input id="f-file" type="file" accept=".xlsx,.xls,.csv,.txt" data-act="file" aria-label="Archivo de pedidos"></div>
     ${s.error?`<div class="note bad">${esc(s.error)}</div>`:''}${s.loading?'<p class="muted" style="margin:0">Leyendo archivo…</p>':''}
-    <p class="muted" style="margin:0;font-size:13px">Sirve la exportación de VTEX o tu Excel de marketplaces (la columna MÉTODO DE PAGO dice si es Falabella o Ripley). Columnas VTEX que uso: Order, Client Name, Client Last Name, Phone, Receiver Name, Street, Number, Complement, Neighborhood, City, Reference, Client Document (DNI), SKU Name, Quantity_SKU, Total Value, Creation Date, Estimate Delivery Date (fecha límite) y Status. Si usas tu propio formato, sirven nombres como Pedido, Cliente, Teléfono, Dirección, Distrito, Referencia.</p>
+    <p class="muted" style="margin:0;font-size:13px">Sirve la exportación de VTEX o tu Excel de marketplaces (la columna MÉTODO DE PAGO dice si es Falabella o Ripley). Columnas VTEX que uso: Order, Client Name, Client Last Name, Phone, Receiver Name, Street, Number, Complement, Neighborhood, City, Reference, Client Document (DNI), SKU Name, SKU Selling Price / SKU Total Price (precio), Shipping Value, Invoice Numbers (boleta), Quantity_SKU, Total Value, Creation Date, Estimate Delivery Date (fecha límite) y Status. Si usas tu propio formato, sirven nombres como Pedido, Cliente, Teléfono, Dirección, Distrito, Referencia.</p>
     <button class="btn" data-act="close">Cancelar</button>`;
   if(s.step==='saving')return `<h2>Guardando pedidos…</h2><div class="progress"><i style="width:${Math.round(s.done/s.total*100)}%"></i></div><p class="muted" style="margin:0">${s.done} de ${s.total}</p>`;
   const vis=visiblesImport(s);
@@ -1075,6 +1084,7 @@ function sheetRotulos(s){
     ${sinDni?`<div class="note">${sinDni} pedido${sinDni!==1?'s':''} marcado${sinDni!==1?'s':''} no tiene${sinDni!==1?'n':''} DNI guardado (se cargó antes de este cambio o el Excel no traía la columna). Si vuelves a cargar el Excel de VTEX, el DNI se completa solo.</div>`:''}
     <div class="acts2"><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="rotGo" ${n?'':'disabled'}>${IC.print}Imprimir ${n} rótulo${n!==1?'s':''}${n?' · '+hojas+' hoja'+(hojas!==1?'s':''):''}</button></div>`;
 }
+const soles=n=>'S/ '+Number(n).toFixed(2);
 function rotuloHtml(p,logo){
   const nom=p.receptor||p.cliente||'';
   const otro=p.receptor&&p.cliente&&norm(p.receptor)!==norm(p.cliente);
@@ -1082,13 +1092,14 @@ function rotuloHtml(p,logo){
   const dir=[p.direccion,p.complemento].filter(Boolean).join(' · ');
   const ciudad=[p.ciudad,p.depto].filter((x,i,a)=>x&&a.findIndex(y=>norm(y)===norm(x))===i).join(', ');
   return `<div class="rot">
-    <div class="rot-top">${logo}<div class="rot-ped"><small>Pedido</small><b>${esc(p.order)}</b></div></div>
+    <div class="rot-top">${logo}<div class="rot-ped"><small>Pedido</small><b>${esc(p.order)}</b>${p.boleta?`<small style="margin-top:1mm">Boleta</small><b>${esc(p.boleta)}</b>`:''}</div></div>
     <div><span class="rot-l">Entregar a</span><div class="rot-nom">${esc(nom)}</div>${otro?`<div class="rot-ref">Compró: ${esc(p.cliente)}</div>`:''}</div>
     <div class="rot-2"><div><span class="rot-l">DNI</span><b>${esc(p.dni||'—')}</b></div><div><span class="rot-l">Teléfono</span><b>${esc(telDisp(p.telefono)||'—')}</b></div></div>
     <div><span class="rot-l">Dirección</span><div class="rot-dir">${esc(dir||'—')}</div></div>
     <div><span class="rot-dis">${esc(p.distrito||'Sin distrito')}</span>${ciudad?` <span class="rot-ref">${esc(ciudad)}</span>`:''}</div>
     ${p.referencia?`<div class="rot-ref"><span class="rot-l">Referencia</span>${esc(p.referencia)}</div>`:''}
-    <div class="rot-it"><span class="rot-l">Contenido · ${p.unidades||0} unidad${(p.unidades||0)!==1?'es':''}</span><ul>${ver.map(i=>`<li><b>${i.q}×</b><span>${esc(i.n)}</span></li>`).join('')}${its.length>MAX?`<li><b>+</b><span>${its.length-ver.length} productos más (ver pedido)</span></li>`:''}</ul></div>
+    <div class="rot-it"><span class="rot-l">Contenido · ${p.unidades||0} unidad${(p.unidades||0)!==1?'es':''}</span><ul${its.length>4?' class="cmp"':''}>${ver.map(i=>`<li><b>${i.q}×</b><span>${esc(i.n)}</span><em>${i.p!=null?soles(i.p):''}</em></li>`).join('')}${its.length>MAX?`<li><b>+</b><span>${its.length-ver.length} productos más (ver pedido)</span><em></em></li>`:''}</ul></div>
+    ${p.total?`<div class="rot-tot">${p.envio?`<span>Envío ${soles(p.envio)}</span>`:'<span></span>'}<span>Total pagado <b>${soles(p.total)}</b></span></div>`:''}
     <div class="rot-pie"><span>Remite: Arena Perú · Supertex del Perú S.A.C.</span><span>www.arenaperu.com</span></div>
   </div>`;
 }
@@ -1127,9 +1138,9 @@ async function guardarImport(){
     try{
       const ref=S.db.doc('pedidos/'+id);
       const ex=await ref.get();
-      if(ex.exists){dup++;const fal={};if(x.fechaLimite&&!ex.data().fechaLimite)fal.fechaLimite=x.fechaLimite;if(x.dni&&!ex.data().dni)fal.dni=x.dni;if(Object.keys(fal).length)await ref.update(fal)}else{
+      if(ex.exists){dup++;const fal={};if(x.fechaLimite&&!ex.data().fechaLimite)fal.fechaLimite=x.fechaLimite;if(x.dni&&!ex.data().dni)fal.dni=x.dni;if(x.boleta&&x.boleta!==ex.data().boleta)fal.boleta=x.boleta;if(x.envio&&!ex.data().envio)fal.envio=x.envio;if(x.total&&!ex.data().total)fal.total=x.total;if(x.items.some(i=>i.p!=null)&&!(ex.data().items||[]).some(i=>i.p!=null))fal.items=x.items.slice(0,30);if(Object.keys(fal).length)await ref.update(fal)}else{
         const t=nowISO();
-        await ref.set({id,order:x.order,canal:x.canal||'VTEX',cliente:x.cliente,receptor:mk?'':x.receptor,telefono:mk?'':x.telefono,telefonoCliente:x.telefono,direccion:mk?'':x.direccion,complemento:mk?'':x.complemento,referencia:mk?'':x.referencia,distrito:mk?'':x.distrito,ciudad:mk?'':x.ciudad,distritoCliente:x.distrito,ciudadCliente:x.ciudad,depto:x.depto,dni:mk?'':(x.dni||''),
+        await ref.set({id,order:x.order,canal:x.canal||'VTEX',cliente:x.cliente,receptor:mk?'':x.receptor,telefono:mk?'':x.telefono,telefonoCliente:x.telefono,direccion:mk?'':x.direccion,complemento:mk?'':x.complemento,referencia:mk?'':x.referencia,distrito:mk?'':x.distrito,ciudad:mk?'':x.ciudad,distritoCliente:x.distrito,ciudadCliente:x.ciudad,depto:x.depto,dni:mk?'':(x.dni||''),boleta:x.boleta||'',envio:x.envio||0,
           items:x.items.slice(0,30),unidades:x.unidades,total:x.total,fechaPedido:x.fechaPedido,fechaLimite:x.fechaLimite||'',courier:x.courier,
           fechaCarga:s.desp,fechaPlan:s.desp,prioridad:!!x.prioridad,estado:'pendiente',intentos:0,motorizado:'',salida:0,recogidoAt:'',entregadoAt:'',motivo:'',
           historial:[{t,tipo:'carga'}],cargadoAt:t,actualizado:t});
