@@ -111,6 +111,9 @@ label.fld{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:
 .canal.c-Falabella{border-color:#9BBF2A;color:#5C7A00}
 .canal.c-Ripley{border-color:#7B5BA8;color:#5B3D86}
 .canal.c-Recojo{border-color:var(--warn);color:var(--warn)}
+.canal.c-Cambio{border-color:var(--accent);color:var(--accent)}
+.cm-est{font-size:13px;margin:0}
+.cm-est.ok{color:var(--ok);font-weight:650}
 .canal.c-Extra{border-color:var(--accent);color:var(--accent)}
 .prio{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:6px;padding:2px 7px;background:var(--bad);color:#fff}
 .card.is-prio{border-color:var(--bad);box-shadow:0 0 0 1px var(--bad) inset}
@@ -317,7 +320,7 @@ const S={
   ready:false,online:null,readOnly:false,setupError:'',
   pinHash:null,ofiOk:ls.get('arena.ofiOk')==='1',
   pedidos:new Map(),
-  motos:[],cfgVersion:null,puntos:{},
+  motos:[],cfgVersion:null,puntos:{},almacen:{},
   view:ls.get('arena.view')||'moto',
   me:ls.get('arena.moto')||'',
   motoTab:'recoger',
@@ -335,16 +338,19 @@ const INACT_MIN=60;
 
 /* ---------- data helpers ---------- */
 function etiquetaEstado(p){
+  if(p.retiro)return p.estado==='entregado'?['Retirado','st-entregado']:['Retiro en almacén','st-reprog'];
   if(p.estado==='entregado')return[esExtra(p)?'Terminado':esRec(p)?'Recogido':'Entregado','st-entregado'];
   if(p.estado==='en_ruta')return['En ruta','st-en_ruta'];
   if((p.intentos||0)>0)return['Reprogramado','st-reprog'];
   return['Por recoger','st-pendiente'];
 }
 function pill(p){const [t,c]=etiquetaEstado(p);return `<span class="pill ${c}">${t}</span>`}
-function porRecoger(){const d=hoy();return [...S.pedidos.values()].filter(p=>p.estado==='pendiente'&&(p.fechaPlan||p.fechaCarga)<=d).sort(ordenUrg)}
+function porRecoger(){const d=hoy();return [...S.pedidos.values()].filter(p=>p.estado==='pendiente'&&!p.retiro&&(p.fechaPlan||p.fechaCarga)<=d).sort(ordenUrg)}
 function ordenRuta(a,b){return (a.distrito||'').localeCompare(b.distrito||'')||(a.order||'').localeCompare(b.order||'')}
 const MKT=['Falabella','Ripley'];
 const esMkt=p=>MKT.includes(p.canal);
+const normDir=t=>String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\b(n|nro|num|numero)\s+(?=\d)/g,'').trim();
+function esDirAlmacen(dir){const a=S.almacen||{};const claves=String(a.claves||a.direccion||'').split(',').map(normDir).filter(k=>k.length>=4);const d=normDir(dir);return !!d&&claves.some(k=>d.includes(k))}
 function canalTag(p){return p.canal&&p.canal!=='VTEX'?`<span class="canal c-${esc(p.canal)}">${esc(p.canal)}</span>`:''}
 function conDestino(p){
   if(!esMkt(p))return p;
@@ -429,6 +435,7 @@ function resumenDia(D){
   for(const o of salidas)o.min=(o.fin&&o.fin>o.ini)?(Date.parse(o.fin)-Date.parse(o.ini))/60000:null;
   const pendientes=[],cargados=[];
   for(const p of S.pedidos.values()){
+    if(p.retiro)continue;
     if(p.fechaCarga===D)cargados.push(p);
     const ent=p.entregadoAt&&dLocal(p.entregadoAt)<=D;
     if(p.fechaCarga<=D&&!ent)pendientes.push(p);
@@ -447,6 +454,7 @@ function pedidosDelDia(D){
 }
 function estadoEnDia(p,D){
   const evs=(p.historial||[]).filter(e=>dLocal(e.t)===D);
+  if(p.retiro)return p.entregadoAt&&dLocal(p.entregadoAt)<=D?['Retirado','st-entregado']:['Retiro en almacén','st-reprog'];
   const last=[...evs].reverse().find(e=>['recojo','entrega','no_entrega'].includes(e.tipo));
   if(D===hoy())return etiquetaEstado(p);
   if(!last)return p.entregadoAt&&dLocal(p.entregadoAt)<=D?[esRec(p)?'Recogido':'Entregado','st-entregado']:['Sin salir','st-pendiente'];
@@ -537,7 +545,7 @@ function vMoto(){
   const rec=porRecoger(),mios=enRuta(S.me),d=hoy();
   const entHoy=eventosDe(d).filter(x=>x.e.tipo==='entrega'&&x.e.m===S.me).reverse();
   const noHoy=eventosDe(d).filter(x=>x.e.tipo==='no_entrega'&&x.e.m===S.me).reverse();
-  const futuros=[...S.pedidos.values()].filter(p=>p.estado==='pendiente'&&(p.fechaPlan||'')>d).length;
+  const futuros=[...S.pedidos.values()].filter(p=>p.estado==='pendiente'&&!p.retiro&&(p.fechaPlan||'')>d).length;
   const tab=S.motoTab;
   let body='';
   if(tab==='recoger'){
@@ -657,7 +665,7 @@ function vOfi(){
   renderBar('');
   const t=S.ofiTab;
   const head=`<div class="row spread"><div><div class="eyebrow">Arena Perú · Ecommerce</div><h1>Control de despachos</h1></div>
-    <div class="row"><button class="btn ghost sm" data-act="bloquear">Bloquear</button><button class="btn" data-act="recojoAsk">${IC.truck}Nuevo recojo</button><button class="btn primary" data-act="importAsk" ${S.readOnly?'disabled':''}>${IC.up}Cargar Excel</button></div></div>
+    <div class="row"><button class="btn ghost sm" data-act="bloquear">Bloquear</button><button class="btn" data-act="recojoAsk">${IC.truck}Nuevo recojo</button><button class="btn" data-act="cambioAsk">${IC.truck}Cambio de producto</button><button class="btn primary" data-act="importAsk" ${S.readOnly?'disabled':''}>${IC.up}Cargar Excel</button></div></div>
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected="${t==='dia'}" data-act="ofiTab" data-t="dia">Día</button>
       <button role="tab" aria-selected="${t==='horas'}" data-act="ofiTab" data-t="horas">Horas</button>
@@ -742,7 +750,15 @@ function tablaDia(lista,D){
   return cards+table;
 }
 function vMotos(){
-  return `<section class="panel" style="max-width:560px"><div><h2>Puntos de entrega de marketplaces</h2><p class="muted" style="margin:4px 0 0;font-size:14px">Dirección donde el motorizado deja los pedidos de cada marketplace. Todos los pedidos del mismo canal se entregan juntos, con una sola foto.</p></div>
+  const al=S.almacen||{};
+  return `<section class="panel" style="max-width:560px"><div><h2>Almacén (retiro de clientes)</h2><p class="muted" style="margin:4px 0 0;font-size:14px">Cuando un pedido tiene esta dirección, la app lo marca como <b>retiro en almacén</b>: el motorizado no lo ve, pero el rótulo sí se imprime.</p></div>
+    <form class="list" data-form="almacen" style="border:1px solid var(--line);border-radius:10px;padding:12px;gap:8px">
+      <label class="fld"><span>Dirección del almacén</span><input id="al-dir" class="input" value="${esc(al.direccion||'')}" placeholder="Ej.: Av. ... 123" required></label>
+      <div class="row"><label class="fld grow"><span>Distrito</span><input id="al-dis" class="input" value="${esc(al.distrito||'')}"></label></div>
+      <label class="fld"><span>Reconocer como retiro si la dirección contiene (opcional)</span><input id="al-cla" class="input" value="${esc(al.claves||'')}" placeholder="Ej.: industrial 123, almacen arena"></label>
+      <span class="muted" style="font-size:12.5px">Separa con coma las formas en que aparece en VTEX. Si lo dejas vacío, se usa la dirección de arriba.</span>
+      <button class="btn primary" type="submit">Guardar almacén</button></form></section>
+  <section class="panel" style="max-width:560px"><div><h2>Puntos de entrega de marketplaces</h2><p class="muted" style="margin:4px 0 0;font-size:14px">Dirección donde el motorizado deja los pedidos de cada marketplace. Todos los pedidos del mismo canal se entregan juntos, con una sola foto.</p></div>
     ${MKT.map(c=>{const pt=S.puntos[c]||{};return `<form class="list" data-form="punto" data-c="${c}" style="border:1px solid var(--line);border-radius:10px;padding:12px;gap:8px">
       <div class="row spread"><span class="canal c-${c}">${c}</span>${pt.direccion?'':'<span class="pill st-reprog">Falta dirección</span>'}</div>
       <label class="fld"><span>Dirección</span><input id="pt-${c}-dir" class="input" value="${esc(pt.direccion||'')}" placeholder="Ej.: Av. ... 123" required></label>
@@ -900,11 +916,12 @@ function renderSheet(){
       <div class="acts2"><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="noGo" ${!s.motivo||S.busy?'disabled':''}>${S.busy?'Guardando…':'Reprogramar'}</button></div>
       <button class="btn ghost sm" data-act="devolver" data-id="${esc(p.id)}">Lo llevé por error: devolver a “Por recoger” sin registrar intento</button>`;
   }else if(s.k==='detalle'&&p){
-    const tipos={deshecho:'Deshecho por error',carga:esExtra(p)?'Encargo creado':esRec(p)?'Recojo creado':'Cargado',recojo:esRec(p)?'Salió a recoger':'Recogido',entrega:esRec(p)?'Recogido donde cliente':'Entregado',no_entrega:esRec(p)?'No se pudo recoger':'No entregado',devuelto:'Devuelto a almacén',reabrir:'Reabierto'};
+    const tipos={deshecho:'Deshecho por error',carga:esExtra(p)?'Encargo creado':esRec(p)?'Recojo creado':'Cargado',recojo:esRec(p)?'Salió a recoger':'Recogido',entrega:esRec(p)?'Recogido donde cliente':'Entregado',no_entrega:esRec(p)?'No se pudo recoger':'No entregado',devuelto:'Devuelto a almacén',reabrir:'Reabierto',retiro:'Retirado en almacén por el cliente'};
     h=`<div class="row spread"><div><div class="eyebrow">${canalTag(p)} ${esc(p.order)}</div><h2>${esc(esMkt(p)?p.cliente:(p.receptor||p.cliente))}</h2>${esMkt(p)?`<div class="muted" style="font-size:13px">Se entrega en el punto de ${esc(p.canal)}${p.distritoCliente?' · cliente en '+esc(p.distritoCliente):''}</div>`:''}</div>${pill(p)}</div>
       <div class="addr"><span class="dist">${esc(p.distrito)}</span> · ${esc(p.ciudad)}<br>${esc(p.direccion)}${p.complemento?' · '+esc(p.complemento):''}${p.referencia?'<br>Ref: '+esc(p.referencia):''}</div>
       <div class="meta"><span>Tel. <b class="mono">${esc(telDisp(p.telefono))||'—'}</b></span><span>${p.unidades||0} und.</span>${p.total?`<span>S/ <b>${Number(p.total).toFixed(2)}</b></span>`:''}<span>Cargado <b>${fechaCorta(p.fechaCarga)}</b></span>${p.fechaLimite?`<span>Límite VTEX <b>${fechaCorta(p.fechaLimite)}</b></span>`:''}${p.fechaPlan&&p.fechaPlan!==p.fechaCarga?`<span>Programado <b>${fechaCorta(p.fechaPlan)}</b></span>`:''}</div>
       ${p.items&&p.items.length?`<div class="items">${esc(itemsTxt(p))}</div>`:''}
+      ${!esRec(p)&&!esExtra(p)&&!esMkt(p)&&p.estado==='pendiente'?(p.retiro?`<div class="note info">Retiro en almacén: el motorizado no ve este pedido y no cuenta en sus horas. El rótulo sí se imprime.</div><div class="acts2"><button class="btn" data-act="retiroOff" data-id="${esc(p.id)}" ${S.readOnly?'disabled':''}>Quitar retiro</button><button class="btn ok" data-act="retiroGo" data-id="${esc(p.id)}" ${S.readOnly?'disabled':''}>${IC.check}Ya lo retiró el cliente</button></div>`:`<button class="btn" data-act="retiroOn" data-id="${esc(p.id)}" ${S.readOnly?'disabled':''}>El cliente lo retira en almacén</button>`):''}
       <div><div class="eyebrow" style="margin-bottom:6px">Historial</div><div class="imp-list" style="max-height:220px">${(p.historial||[]).map(e=>`<div class="imp-row" style="grid-template-columns:auto 1fr"><span class="mono" style="font-size:12px">${fechaCorta(dLocal(e.t)).slice(0,5)} ${hLocal(e.t)}</span><span><b>${tipos[e.tipo]||e.tipo}</b>${e.m?' · '+esc(e.m):''}${e.salida?' · salida '+e.salida:''}${e.motivo?' · '+esc(e.motivo):''}${e.obs?' · '+esc(e.obs):''}${e.para?' · para el '+fechaCorta(e.para):''}</span></div>`).join('')}</div></div>
       ${p.estado!=='entregado'?`<form class="list" data-form="indic" style="border:1px solid var(--line);border-radius:10px;padding:12px;gap:10px">
         <div class="eyebrow">Indicaciones para el motorizado</div>
@@ -958,6 +975,21 @@ function renderSheet(){
       <label class="fld"><span>Nota para el motorizado (opcional)</span><input id="rc-nota" class="input" maxlength="160"></label>
       <label class="row" style="font-weight:650"><input id="rc-prio" type="checkbox" style="width:20px;height:20px"> ★ Con prioridad</label>
       <div class="acts2"><button class="btn" type="button" data-act="close">Cancelar</button><button class="btn primary" type="submit">Crear recojo</button></div>
+    </form>`}
+  else if(s.k==='cambio'){h=`<div><div class="eyebrow">Sale de almacén como un pedido más</div><h2>Nuevo cambio de producto</h2></div>
+    <form class="list" data-form="cambio" style="gap:10px">
+      <div class="row"><label class="fld grow"><span>N° de pedido original</span><input id="cm-ped" class="input" required maxlength="40" autocomplete="off" placeholder="Ej.: 1621630576894-01"></label><button class="btn" type="button" data-act="cambioBuscar" style="align-self:flex-end">Buscar</button></div>
+      <p id="cm-est" class="muted cm-est">Escribe el número de pedido y se completan los datos del cliente.</p>
+      <div class="row"><label class="fld grow"><span>Nombre del cliente</span><input id="cm-cli" class="input" required maxlength="80"></label><label class="fld grow"><span>Teléfono</span><input id="cm-tel" class="input" inputmode="tel" maxlength="20"></label></div>
+      <div class="row"><label class="fld grow"><span>DNI</span><input id="cm-dni" class="input" inputmode="numeric" maxlength="12"></label></div>
+      <label class="row" style="font-weight:650"><input id="cm-ret" type="checkbox" style="width:20px;height:20px"> El cliente lo retira en almacén (no sale con motorizado)</label>
+      <label class="fld"><span>Dirección</span><input id="cm-dir" class="input" maxlength="160" placeholder="Calle, número, dpto."></label>
+      <div class="row"><label class="fld grow"><span>Distrito</span><input id="cm-dis" class="input" maxlength="60"></label><label class="fld grow"><span>Referencia</span><input id="cm-ref" class="input" maxlength="120"></label></div>
+      <div class="row"><label class="fld grow" style="flex:3"><span>Prenda nueva que se envía</span><input id="cm-que" class="input" required maxlength="160" placeholder="Ej.: Lentes de natación, talla L"></label><label class="fld grow"><span>Cant.</span><input id="cm-cant" class="input" type="number" min="1" max="20" value="1" inputmode="numeric"></label></div>
+      <div class="row"><label class="fld grow"><span>Fecha de despacho</span><input id="cm-fec" class="input" type="date" min="${hoy()}" value="${hoy()}"></label><label class="fld grow"><span>Entregar desde</span><input id="cm-desde" class="input" type="time"></label><label class="fld grow"><span>hasta</span><input id="cm-hasta" class="input" type="time"></label></div>
+      <label class="fld"><span>Nota para el motorizado (opcional)</span><input id="cm-nota" class="input" maxlength="160"></label>
+      <label class="row" style="font-weight:650"><input id="cm-prio" type="checkbox" style="width:20px;height:20px"> ★ Con prioridad</label>
+      <div class="acts2"><button class="btn" type="button" data-act="close">Cancelar</button><button class="btn primary" type="submit">Crear cambio</button></div>
     </form>`}
   else if(s.k==='mapa'&&p){h=`<div><div class="eyebrow">${esMkt(p)?esc(p.canal)+' · punto de entrega':esc(p.order)}</div><h2>¿Con qué app quieres ir?</h2></div>
     <div class="addr"><span class="dist">${esc(p.distrito)}</span><br>${esc(p.direccion)}${p.complemento?' · '+esc(p.complemento):''}${p.referencia?`<br><span class="muted">Ref: ${esc(p.referencia)}</span>`:''}</div>
@@ -1074,13 +1106,13 @@ function sheetImport(s){
     <div class="acts2"><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="impGo" ${nSel?'':'disabled'}>Cargar ${nSel} pedido${nSel!==1?'s':''}</button></div>`;
 }
 /* ---------- Rótulos (pedidos de Lima que reparte el motorizado) ---------- */
-function candidatosRotulo(D){return pedidosDelDia(D).filter(p=>!p.tipo&&(!p.canal||p.canal==='VTEX')).sort(ordenRuta)}
+function candidatosRotulo(D){return pedidosDelDia(D).filter(p=>!p.tipo&&(!p.canal||p.canal==='VTEX'||p.canal==='Cambio')).sort(ordenRuta)}
 function sheetRotulos(s){
   const c=candidatosRotulo(s.D),n=c.filter(x=>s.sel.has(x.id)).length,hojas=Math.ceil(n/4);
   const sinDni=c.filter(x=>s.sel.has(x.id)&&!x.dni).length;
   return `<div><div class="eyebrow">${esc(fechaLarga(s.D))}</div><h2>Imprimir rótulos de Lima</h2><p class="muted" style="margin:4px 0 0;font-size:13.5px">Salen 4 rótulos por hoja A4 para recortar y pegar en cada paquete. Vienen marcados los pedidos cargados ese día.</p></div>
-    <div class="row spread"><span class="muted" style="font-size:13px">${c.length} pedido${c.length!==1?'s':''} de Lima</span><button class="btn ghost sm" data-act="rotAll">Marcar / desmarcar todos</button></div>
-    <div class="imp-list">${c.map(x=>`<label class="imp-row"><input type="checkbox" data-act="impSel" data-o="${esc(x.id)}" ${s.sel.has(x.id)?'checked':''}><span><b>${esc(x.receptor||x.cliente)}</b> · <span class="muted">${esc(x.distrito)}</span><br><span class="ord">${esc(x.order)}</span> <span class="muted" style="font-size:12px">${x.unidades||0} und. · cargado ${fechaCorta(x.fechaCarga).slice(0,5)}</span></span><span class="pill ${estadoEnDia(x,s.D)[1]}">${estadoEnDia(x,s.D)[0]}</span></label>`).join('')}</div>
+    <div class="row spread"><span class="muted" style="font-size:13px">${c.length} pedido${c.length!==1?'s':''} de Lima (incluye cambios)</span><button class="btn ghost sm" data-act="rotAll">Marcar / desmarcar todos</button></div>
+    <div class="imp-list">${c.map(x=>`<label class="imp-row"><input type="checkbox" data-act="impSel" data-o="${esc(x.id)}" ${s.sel.has(x.id)?'checked':''}><span><b>${esc(x.receptor||x.cliente)}</b> · <span class="muted">${esc(x.distrito)}</span><br>${x.cambio?'<span class="canal c-Cambio">Cambio</span> ':''}${x.retiro?'<span class="pill st-reprog">Retiro</span> ':''}<span class="ord">${esc(x.cambio?x.pedidoOrigen||x.order:x.order)}</span> <span class="muted" style="font-size:12px">${x.unidades||0} und. · cargado ${fechaCorta(x.fechaCarga).slice(0,5)}</span></span><span class="pill ${estadoEnDia(x,s.D)[1]}">${estadoEnDia(x,s.D)[0]}</span></label>`).join('')}</div>
     ${sinDni?`<div class="note">${sinDni} pedido${sinDni!==1?'s':''} marcado${sinDni!==1?'s':''} no tiene${sinDni!==1?'n':''} DNI guardado (se cargó antes de este cambio o el Excel no traía la columna). Si vuelves a cargar el Excel de VTEX, el DNI se completa solo.</div>`:''}
     <div class="acts2"><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="rotGo" ${n?'':'disabled'}>${IC.print}Imprimir ${n} rótulo${n!==1?'s':''}${n?' · '+hojas+' hoja'+(hojas!==1?'s':''):''}</button></div>`;
 }
@@ -1089,14 +1121,16 @@ function rotuloHtml(p,logo){
   const nom=p.receptor||p.cliente||'';
   const otro=p.receptor&&p.cliente&&norm(p.receptor)!==norm(p.cliente);
   const its=p.items||[],MAX=7,ver=its.length>MAX?its.slice(0,MAX-1):its;
-  const dir=[p.direccion,p.complemento].filter(Boolean).join(' · ');
+  const ret=!!p.retiro,alm=S.almacen||{};
+  const dir=ret&&alm.direccion?alm.direccion:[p.direccion,p.complemento].filter(Boolean).join(' · ');
   const ciudad=[p.ciudad,p.depto].filter((x,i,a)=>x&&a.findIndex(y=>norm(y)===norm(x))===i).join(', ');
   return `<div class="rot">
-    <div class="rot-top">${logo}<div class="rot-ped"><small>Pedido</small><b>${esc(p.order)}</b>${p.boleta?`<small style="margin-top:1mm">${/^\s*F/i.test(p.boleta)?'Factura':/^\s*B/i.test(p.boleta)?'Boleta':/^\s*POL/i.test(p.boleta)?'Pedido Siesa':'Comprobante'}</small><b>${esc(p.boleta)}</b>`:''}</div></div>
-    <div><span class="rot-l">Entregar a</span><div class="rot-nom">${esc(nom)}</div>${otro?`<div class="rot-ref">Compró: ${esc(p.cliente)}</div>`:''}</div>
+    <div class="rot-top">${logo}<div class="rot-ped">${p.cambio?`<small>Cambio · pedido</small><b>${esc(p.pedidoOrigen||p.order)}</b>`:`<small>Pedido</small><b>${esc(p.order)}</b>`}${p.boleta?`<small style="margin-top:1mm">${/^\s*F/i.test(p.boleta)?'Factura':/^\s*B/i.test(p.boleta)?'Boleta':/^\s*POL/i.test(p.boleta)?'Pedido Siesa':'Comprobante'}</small><b>${esc(p.boleta)}</b>`:''}</div></div>
+    ${ret?'<div style="border:2px solid #000;padding:.6mm 2mm;text-align:center;font-weight:800;font-size:8.5pt;letter-spacing:.06em">RETIRO EN ALMACÉN · NO SALE CON MOTORIZADO</div>':''}
+    <div><span class="rot-l">${ret?'Retira':'Entregar a'}</span><div class="rot-nom">${esc(nom)}</div>${otro?`<div class="rot-ref">Compró: ${esc(p.cliente)}</div>`:''}</div>
     <div class="rot-2"><div><span class="rot-l">DNI</span><b>${esc(p.dni||'—')}</b></div><div><span class="rot-l">Teléfono</span><b>${esc(telDisp(p.telefono)||'—')}</b></div></div>
     <div><span class="rot-l">Dirección</span><div class="rot-dir">${esc(dir||'—')}</div></div>
-    <div><span class="rot-dis">${esc(p.distrito||'Sin distrito')}</span>${ciudad?` <span class="rot-ref">${esc(ciudad)}</span>`:''}</div>
+    <div><span class="rot-dis">${esc((ret&&alm.distrito)||p.distrito||'Sin distrito')}</span>${ciudad?` <span class="rot-ref">${esc(ciudad)}</span>`:''}</div>
     ${p.referencia?`<div class="rot-ref"><span class="rot-l">Referencia</span>${esc(p.referencia)}</div>`:''}
     <div class="rot-it"><span class="rot-l">Contenido · ${p.unidades||0} unidad${(p.unidades||0)!==1?'es':''}</span><ul${its.length>4?' class="cmp"':''}>${ver.map(i=>`<li><b>${i.q}×</b><span>${esc(i.n)}</span><em>${i.p!=null?soles(i.p):''}</em></li>`).join('')}${its.length>MAX?`<li><b>+</b><span>${its.length-ver.length} productos más (ver pedido)</span><em></em></li>`:''}</ul></div>
     ${p.total?`<div class="rot-tot">${p.envio?`<span>Envío ${soles(p.envio)}</span>`:'<span></span>'}<span>Total pagado <b>${soles(p.total)}</b></span></div>`:''}
@@ -1143,7 +1177,7 @@ async function guardarImport(){
         await ref.set({id,order:x.order,canal:x.canal||'VTEX',cliente:x.cliente,receptor:mk?'':x.receptor,telefono:mk?'':x.telefono,telefonoCliente:x.telefono,direccion:mk?'':x.direccion,complemento:mk?'':x.complemento,referencia:mk?'':x.referencia,distrito:mk?'':x.distrito,ciudad:mk?'':x.ciudad,distritoCliente:x.distrito,ciudadCliente:x.ciudad,depto:x.depto,dni:mk?'':(x.dni||''),boleta:x.boleta||'',envio:x.envio||0,
           items:x.items.slice(0,30),unidades:x.unidades,total:x.total,fechaPedido:x.fechaPedido,fechaLimite:x.fechaLimite||'',courier:x.courier,
           fechaCarga:s.desp,fechaPlan:s.desp,prioridad:!!x.prioridad,estado:'pendiente',intentos:0,motorizado:'',salida:0,recogidoAt:'',entregadoAt:'',motivo:'',
-          historial:[{t,tipo:'carga'}],cargadoAt:t,actualizado:t});
+          historial:[{t,tipo:'carga'}],cargadoAt:t,actualizado:t,retiro:!mk&&esDirAlmacen(x.direccion)});
         ok++;
       }
     }catch(e){err=e;break}
@@ -1416,11 +1450,15 @@ document.addEventListener('click',async ev=>{
     case 'camFoto':capturarCamara();break;
     case 'camCerrar':cerrarCamara();break;
     case 'recojoAsk':openSheet({k:'recojo'});break;
+    case 'cambioAsk':openSheet({k:'cambio'});break;
+    case 'cambioBuscar':buscarPedidoCambio();break;
     case 'extraAsk':openSheet({k:'extra'});break;
     case 'deshacerAsk':openSheet({k:'deshacer',id});break;
     case 'deshacerGo':if(p){await deshacer(p);closeSheet();S.motoTab='ruta';render();toast('Listo: el pedido volvió a “En ruta”')}break;
     case 'anularAsk':openSheet({k:'anular',id});break;
     case 'anularGo':if(p&&esExtra(p)){S.db.doc('pedidos/'+p.id).delete().catch(e=>toast(errMsg(e)));S.pedidos.delete(p.id);if(S._A)S._A.delete(p.id);if(S._B)S._B.delete(p.id);closeSheet();render();toast('Encargo anulado')}break;
+    case 'retiroOn':case 'retiroOff':if(p){const on=a==='retiroOn';S.db.doc('pedidos/'+p.id).update({retiro:on,actualizado:nowISO()}).catch(e=>toast(errMsg(e)));S.pedidos.set(p.id,{...p,retiro:on});renderSheet();render();toast(on?'Marcado: el cliente retira en almacén':'Retiro quitado: vuelve a Por recoger')}break;
+    case 'retiroGo':if(p){const t=nowISO();await actualizar(p,{estado:'entregado',entregadoAt:t,motorizado:''},{t,tipo:'retiro'});renderSheet();render();toast('Retiro registrado')}break;
     case 'prio':if(p){S.db.doc('pedidos/'+p.id).update({prioridad:!p.prioridad}).catch(e=>toast(errMsg(e)));S.pedidos.set(p.id,{...p,prioridad:!p.prioridad});render();toast(p.prioridad?'Prioridad quitada':'Marcado como prioridad')}break;
     case 'limpiarFotos':limpiarFotos();break;
     case 'noEntAsk':openSheet({k:'no',id});break;
@@ -1524,6 +1562,21 @@ document.addEventListener('submit',async ev=>{
     if(datos.horaDesde&&datos.horaHasta&&datos.horaDesde>datos.horaHasta){toast('La hora “hasta” debe ser después de “desde”');return}
     S.db.doc('pedidos/'+id).set(datos).catch(e=>toast(errMsg(e)));S._A=new Map(S._A||[]);S._A.set(id,datos);mezclar();
     closeSheet();toast('Recojo creado para el '+fechaCorta(fec));return}
+  if(f.dataset.form==='cambio'){ev.preventDefault();const g=k=>document.getElementById('cm-'+k).value.trim();
+    const fec=g('fec')||hoy(),t=nowISO(),id=idDe('CAM-'+Date.now().toString(36).toUpperCase());
+    const cant=Math.max(1,Math.min(20,parseInt(g('cant'),10)||1));
+    const ret=document.getElementById('cm-ret').checked;let dir=g('dir'),dis=g('dis');
+    if(ret){const a=S.almacen||{};dir=dir||a.direccion||'Retiro en almacén';dis=dis||a.distrito||''}
+    else if(!dir||!dis){toast('Falta la dirección y el distrito');return}
+    const datos={id,retiro:ret,canal:'Cambio',cambio:true,pedidoOrigen:g('ped'),order:'CAMBIO '+g('ped'),cliente:g('cli'),receptor:'',dni:g('dni'),telefono:g('tel'),direccion:dir,complemento:'',referencia:g('ref'),distrito:dis,ciudad:'Lima',
+      items:[{n:g('que'),q:cant}],unidades:cant,total:0,fechaPedido:fec,fechaLimite:'',fechaCarga:fec,fechaPlan:fec,estado:'pendiente',intentos:0,motorizado:'',salida:0,recogidoAt:'',entregadoAt:'',motivo:'',
+      prioridad:document.getElementById('cm-prio').checked,horaDesde:g('desde'),horaHasta:g('hasta'),nota:g('nota'),historial:[{t,tipo:'carga'}],cargadoAt:t,actualizado:t};
+    if(datos.horaDesde&&datos.horaHasta&&datos.horaDesde>datos.horaHasta){toast('La hora “hasta” debe ser después de “desde”');return}
+    S.db.doc('pedidos/'+id).set(datos).catch(e=>toast(errMsg(e)));S._A=new Map(S._A||[]);S._A.set(id,datos);mezclar();
+    closeSheet();toast(ret?'Cambio creado (retiro en almacén): imprime su rótulo':'Cambio creado para el '+fechaCorta(fec)+': ya puedes imprimir su rótulo');return}
+  if(f.dataset.form==='almacen'){ev.preventDefault();const g=k=>document.getElementById('al-'+k).value.trim();
+    const al={direccion:g('dir'),distrito:g('dis'),claves:g('cla')};
+    try{await S.db.doc('config/general').set({almacen:al},{merge:true});S.almacen=al;mezclar();toast('Almacén guardado')}catch(e){toast(errMsg(e))}return}
   if(f.dataset.form==='punto'){ev.preventDefault();const c=f.dataset.c,g=k=>document.getElementById(`pt-${c}-${k}`).value.trim();
     const pts={...S.puntos,[c]:{direccion:g('dir'),distrito:g('dis')||'San Isidro',telefono:g('tel'),referencia:g('ref')}};
     try{await S.db.doc('config/general').set({puntos:pts},{merge:true});S.puntos=pts;mezclar();toast('Punto de '+c+' guardado')}catch(e){toast(errMsg(e))}return}
@@ -1536,6 +1589,38 @@ async function guardarMotos(list){try{await S.db.doc('config/general').set({moto
 
 /* ---------- boot ---------- */
 render();
+const baseOrden=o=>String(o||'').trim().replace(/-\d+$/,'');
+function llenarCambio(p){
+  const set=(k,v)=>{const el=document.getElementById('cm-'+k);if(el&&v!=null)el.value=v};
+  const real=!esMkt(p)&&p.direccion;
+  set('cli',p.receptor||p.cliente||'');set('tel',p.telefono||p.telefonoCliente||'');set('dni',p.dni||'');
+  if(real){set('dir',[p.direccion,p.complemento].filter(Boolean).join(' · '));set('dis',p.distrito||'');set('ref',p.referencia||'')}
+  const ret=!!real&&(p.retiro||esDirAlmacen(p.direccion)),ck=document.getElementById('cm-ret');if(ck)ck.checked=ret;
+  const est=document.getElementById('cm-est');
+  if(est){est.className='cm-est '+(real?'ok':'muted');est.textContent=ret?'Pedido encontrado: es retiro en almacén, no sale con motorizado.':real?'Pedido encontrado: revisa los datos y corrígelos si el cliente pide otra dirección.':'Encontré el pedido, pero es de '+(p.canal||'marketplace')+' y no tiene dirección del cliente: complétala a mano.'}
+}
+async function buscarPedidoCambio(){
+  const inp=document.getElementById('cm-ped'),est=document.getElementById('cm-est');if(!inp)return;
+  const v=inp.value.trim();if(!v)return;const b=baseOrden(v);
+  const propio=p=>!p.tipo&&!p.cambio&&baseOrden(p.order)===b;
+  let hallado=[...S.pedidos.values()].filter(propio);
+  if(!hallado.length&&S.db){
+    if(est){est.className='cm-est muted';est.textContent='Buscando…'}
+    try{
+      const cand=[...new Set([v,b,b+'-01'])];
+      for(const c of cand){const q=await S.db.collection('pedidos').where('order','==',c).limit(5).get();
+        hallado=q.docs.map(d=>({...d.data(),id:d.id})).filter(p=>!p.tipo&&!p.cambio);if(hallado.length)break}
+    }catch(e){if(est){est.className='cm-est muted';est.textContent='No pude buscar ahora: llena los datos a mano.'}return}
+  }
+  if(!hallado.length){if(est){est.className='cm-est muted';est.textContent='No encontré ese pedido en la app: llena los datos a mano.'}return}
+  hallado.sort((a,b)=>(a.order===v?0:1)-(b.order===v?0:1)||String(b.fechaCarga||'').localeCompare(String(a.fechaCarga||'')));
+  llenarCambio(hallado[0]);
+}
+document.addEventListener('change',ev=>{
+  const el=ev.target;if(!el)return;
+  if(el.id==='cm-ped')buscarPedidoCambio();
+  if(el.id==='cm-ret'&&el.checked){const a=S.almacen||{};if(a.direccion){document.getElementById('cm-dir').value=a.direccion;document.getElementById('cm-dis').value=a.distrito||''}}
+});
 function mezclarYRetomar(){mezclar();if(!S._retomado&&S.cfgLoaded&&S.me&&S.motos.includes(S.me))retomarPendiente()}
 function mezclar(){
   const m=new Map();for(const [k,v] of (S._B||[]))m.set(k,conDestino(v));for(const [k,v] of (S._A||[]))m.set(k,conDestino(v));
@@ -1577,7 +1662,7 @@ async function boot(){
     S.setupError=(e&&e.code==='auth/operation-not-allowed')?'Activa el inicio de sesión Anónimo en Firebase › Authentication › Método de acceso.':(e&&e.code==='auth/network-request-failed')?'Sin conexión. Abre la app con internet la primera vez.':'Firebase respondió: '+((e&&e.code)||e);
     S.ready=true;render();return}
   S.db=db;S.ready=true;render();
-  db.doc('config/general').onSnapshot(snap=>{const d=snap.exists?snap.data():{};S.motos=d.motorizados||[];S.pinHash=d.pinHash||null;S.puntos=d.puntos||{};S.cfgLoaded=true;mezclar()},e=>{S.cfgLoaded=true;toast(errMsg(e))});
+  db.doc('config/general').onSnapshot(snap=>{const d=snap.exists?snap.data():{};S.motos=d.motorizados||[];S.pinHash=d.pinHash||null;S.puntos=d.puntos||{};S.almacen=d.almacen||{};S.cfgLoaded=true;mezclar()},e=>{S.cfgLoaded=true;toast(errMsg(e))});
   // 1) pedidos que siguen abiertos (por recoger o en ruta), sin importar la fecha
   db.collection('pedidos').where('estado','in',['pendiente','en_ruta']).onSnapshot(snap=>{
     S._A=new Map(snap.docs.map(d=>[d.id,{...d.data(),id:d.id}]));mezclarYRetomar();
